@@ -1,35 +1,57 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { useEffect } from 'react';
+import { ConfigProvider, AdaptivityProvider, AppRoot, SplitLayout, SplitCol, ScreenSpinner } from '@vkontakte/vkui';
+import { RouterProvider } from '@vkontakte/vk-mini-apps-router';
+import '@vkontakte/vkui/dist/vkui.css';
 
-function App() {
-  const [count, setCount] = useState(0)
+import { router } from './router/routes';
+import { UserProvider, useUser } from './store/UserContext';
+import { useVKBridge } from './bridge/useVKBridge';
+import { ErrorPlaceholder } from './components/common/ErrorPlaceholder';
+import { AppView } from './AppView';
 
-  return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+function AppInner() {
+  const { user, ready, error } = useVKBridge();
+  const { setUser } = useUser();
+
+  useEffect(() => {
+    if (user) setUser(user);
+  }, [user, setUser]);
+
+  if (!ready) {
+    return (
+      <SplitLayout>
+        <SplitCol>
+          <ScreenSpinner />
+        </SplitCol>
+      </SplitLayout>
+    );
+  }
+
+  if (error) {
+    return (
+      <SplitLayout>
+        <SplitCol>
+          <ErrorPlaceholder message={error} />
+        </SplitCol>
+      </SplitLayout>
+    );
+  }
+
+  return <AppView />;
 }
 
-export default App
+export default function App() {
+  return (
+    <ConfigProvider>
+      <AdaptivityProvider>
+        <AppRoot>
+          <RouterProvider router={router}>
+            <UserProvider>
+              <AppInner />
+            </UserProvider>
+          </RouterProvider>
+        </AppRoot>
+      </AdaptivityProvider>
+    </ConfigProvider>
+  );
+}
