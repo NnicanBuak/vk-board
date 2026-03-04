@@ -18,7 +18,7 @@ import {
   ModalPageHeader,
   PanelHeaderClose,
 } from '@vkontakte/vkui';
-import { Icon28ShareOutline } from '@vkontakte/icons';
+import { Icon28ShareOutline, Icon28StatisticsOutline } from '@vkontakte/icons';
 import { useRouteNavigator, useParams } from '@vkontakte/vk-mini-apps-router';
 import bridge from '@vkontakte/vk-bridge';
 
@@ -29,11 +29,13 @@ import { CardItem } from '../components/card/CardItem';
 import { CardForm } from '../components/card/CardForm';
 import { EmptyState } from '../components/common/EmptyState';
 import { ErrorPlaceholder } from '../components/common/ErrorPlaceholder';
+import { ResultsContent } from '../components/results/ResultsContent';
 import { buildShareLink } from '../utils/buildShareLink';
 import type { SortMode } from '../api/cards';
 import type { Card } from '../types/card';
 
 const MODAL_CARD = 'card_form';
+const MODAL_RESULTS = 'results';
 
 interface Props {
   id: string;
@@ -102,6 +104,18 @@ export function BoardPanel({ id }: Props) {
   const modal = (
     <ModalRoot activeModal={activeModal} onClose={() => { setActiveModal(null); setEditingCard(null); }}>
       <ModalPage
+        id={MODAL_RESULTS}
+        header={
+          <ModalPageHeader
+            after={<PanelHeaderClose onClick={() => setActiveModal(null)} />}
+          >
+            Итоги
+          </ModalPageHeader>
+        }
+      >
+        <ResultsContent cards={cards} onClose={() => setActiveModal(null)} />
+      </ModalPage>
+      <ModalPage
         id={MODAL_CARD}
         header={
           <ModalPageHeader
@@ -125,9 +139,16 @@ export function BoardPanel({ id }: Props) {
       <PanelHeader
         before={<PanelHeaderBack onClick={() => navigator.back()} />}
         after={
-          <PanelHeaderButton onClick={handleShare}>
-            <Icon28ShareOutline />
-          </PanelHeaderButton>
+          <div style={{ display: 'flex' }}>
+            {isAdmin && (
+              <PanelHeaderButton onClick={() => setActiveModal(MODAL_RESULTS)}>
+                <Icon28StatisticsOutline />
+              </PanelHeaderButton>
+            )}
+            <PanelHeaderButton onClick={handleShare}>
+              <Icon28ShareOutline />
+            </PanelHeaderButton>
+          </div>
         }
       >
         {board?.title ?? 'Доска'}
