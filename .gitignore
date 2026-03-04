@@ -23,6 +23,8 @@ server/.env
 server/prisma/*.db
 
 # Editor directories and files
+.claude/
+DEVLOG.md
 .vscode/*
 !.vscode/extensions.json
 .idea
