@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     // Allow VK tunnel to proxy requests to the dev server
-    allowedHosts: 'all',
+    allowedHosts: true,
     port: 5173,
   },
   build: {

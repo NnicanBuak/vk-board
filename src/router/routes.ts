@@ -5,14 +5,14 @@ import {
   createRoot,
 } from '@vkontakte/vk-mini-apps-router';
 
-export const router = createHashRouter([
-  createRoot('root', [
-    createView('main', [
-      createPanel('home', '/'),
-      createPanel('board', '/board/:boardId'),
-    ]),
+const root = createRoot('root', [
+  createView('main', [
+    createPanel('home', '/'),
+    createPanel('board', '/board/:boardId'),
   ]),
 ]);
+
+export const router = createHashRouter(root.getRoutes());
 
 export const PANELS = {
   HOME: 'home',

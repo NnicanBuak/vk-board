@@ -8,7 +8,6 @@ import {
   Header,
   Button,
   SegmentedControl,
-  SegmentedControlItem,
   Spinner,
   PullToRefresh,
   Snackbar,
@@ -164,16 +163,17 @@ export function BoardPanel({ id }: Props) {
                 <SegmentedControl
                   value={sort}
                   onChange={(val) => setSort(val as SortMode)}
-                >
-                  <SegmentedControlItem value="date">Новые</SegmentedControlItem>
-                  <SegmentedControlItem value="likes">Популярные</SegmentedControlItem>
-                </SegmentedControl>
+                  options={[
+                    { label: 'Новые', value: 'date' },
+                    { label: 'Популярные', value: 'likes' },
+                  ]}
+                />
               </Div>
             </Group>
 
             <Group
               header={
-                <Header aside={
+                <Header after={
                   <Button
                     mode="tertiary"
                     onClick={() => { setEditingCard(null); setActiveModal(MODAL_CARD); }}

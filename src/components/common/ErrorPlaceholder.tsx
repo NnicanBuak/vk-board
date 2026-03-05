@@ -10,7 +10,7 @@ export function ErrorPlaceholder({ message = 'Что-то пошло не так
   return (
     <Placeholder
       icon={<Icon56ErrorTriangleOutline />}
-      header="Ошибка"
+      title="Ошибка"
       action={onRetry && <Button onClick={onRetry}>Повторить</Button>}
     >
       {message}

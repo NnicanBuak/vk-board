@@ -1,5 +1,5 @@
 import { Group, Header, SimpleCell, Caption, Button, Div } from '@vkontakte/vkui';
-import { Icon24LikeFillRed } from '@vkontakte/icons';
+import { Icon28LikeFillRed } from '@vkontakte/icons';
 import type { Card } from '../../types/card';
 
 interface Props {
@@ -42,7 +42,7 @@ export function ResultsContent({ cards, onClose }: Props) {
               before={<Caption style={{ width: 20, textAlign: 'center' }}>{index + 1}</Caption>}
               after={
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <Icon24LikeFillRed />
+                  <Icon28LikeFillRed />
                   <Caption>{card.likeCount}</Caption>
                 </div>
               }

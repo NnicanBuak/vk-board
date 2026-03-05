@@ -1,73 +1,122 @@
-# React + TypeScript + Vite
+# Board for Chat — VK Mini App
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Многопользовательская доска карточек для чатов ВКонтакте. Участники добавляют идеи, голосуют лайками, а администратор выбирает финальный вариант. Подходит для любых командных решений: выбор подарка, места встречи, фильма, задач.
 
-Currently, two official plugins are available:
+## Почему не аналоги
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+| | Board for Chat | Miro | Trello |
+|---|---|---|---|
+| Запуск прямо в ВК | ✅ | ❌ | ❌ |
+| Не требует регистрации | ✅ | ❌ | ❌ |
+| Открытый код | ✅ | ❌ | ❌ |
+| Ориентирован на голосование | ✅ | ❌ | ❌ |
 
-## React Compiler
+**Проигрывает аналогам в:** отсутствии drag-and-drop и визуальных схем, нет real-time обновлений (WebSocket), нет rich-text в карточках.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Стек
 
-## Expanding the ESLint configuration
+- **Frontend:** React 18, TypeScript, VKUI, VK Bridge, vk-mini-apps-router, Vite
+- **Backend:** Node.js, Express, TypeScript, Prisma ORM, PostgreSQL
+- **Авторизация:** JWT, проверка `vk_sign` через HMAC-SHA256
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## Возможности
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+- Создание досок с названием и описанием
+- Список карточек с сортировкой по дате или лайкам
+- Добавление, редактирование и удаление карточек (автор — свои, admin — любые)
+- Система лайков с оптимистичным обновлением UI
+- Роли: **admin** (создатель) и **member** (участник, вступает по ссылке)
+- Пометка карточек как «Выбрано» (только admin)
+- Шаринг доски через VK Share API
+- Модалка итогов: топ‑3 по лайкам + выбранные карточки
+- Копирование итогов в буфер для вставки в чат
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+## Запуск локально
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+### Требования
+
+- Node.js 18+
+- PostgreSQL (локально или Docker)
+
+### 1. База данных
+
+```bash
+createdb board_for_chat
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+### 2. Бэкенд
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+```bash
+cd server
+cp .env.example .env
+# Заполните DATABASE_URL, JWT_SECRET (мин. 32 символа), VK_SECRET
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+npm install
+npm run db:push       # применить схему Prisma
+npm run db:seed       # (опционально) тестовые данные
+npm run dev           # http://localhost:3001
 ```
+
+### 3. Фронтенд
+
+```bash
+# В корне проекта
+cp .env.example .env.local
+# Заполните VITE_API_URL и VITE_VK_APP_ID
+
+npm install
+npm run dev           # http://localhost:5173
+```
+
+### 4. Туннель для VK
+
+```bash
+npx @vkontakte/vk-tunnel --insecure
+# Скопируйте HTTPS-URL в настройки приложения на vk.com/dev
+```
+
+## Переменные окружения
+
+### Фронтенд (`.env.local`)
+
+| Переменная | Описание |
+|---|---|
+| `VITE_API_URL` | URL бэкенда, например `http://localhost:3001/api` |
+| `VITE_VK_APP_ID` | ID приложения в VK |
+
+### Бэкенд (`server/.env`)
+
+| Переменная | Описание |
+|---|---|
+| `DATABASE_URL` | Строка подключения PostgreSQL |
+| `JWT_SECRET` | Секрет для подписи JWT (мин. 32 символа) |
+| `VK_SECRET` | Сервисный ключ приложения VK (для проверки `vk_sign`) |
+| `FRONTEND_URL` | URL фронтенда для CORS (по умолчанию `http://localhost:5173`) |
+| `PORT` | Порт сервера (по умолчанию `3001`) |
+
+## Структура проекта
+
+```
+vk-mini-app/
+├── src/                    # Фронтенд (React + VKUI)
+│   ├── api/                # API-клиент и модули запросов
+│   ├── bridge/             # Инициализация VK Bridge
+│   ├── components/         # UI-компоненты (card, board, results, common)
+│   ├── hooks/              # React-хуки для данных
+│   ├── panels/             # Экраны: HomePanel, BoardPanel
+│   ├── router/             # Hash-роутер (vk-mini-apps-router)
+│   ├── store/              # React Context (текущий пользователь)
+│   ├── types/              # TypeScript-интерфейсы
+│   └── utils/              # Вспомогательные функции
+├── server/                 # Бэкенд (Node.js + Express + Prisma)
+│   ├── prisma/             # schema.prisma, seed.ts
+│   └── src/
+│       ├── middleware/     # JWT-мидлвара
+│       └── routes/         # REST API: /auth /boards /cards /likes
+├── .env.example            # Шаблон переменных фронтенда
+└── README.md
+```
+
+## Лицензия
+
+MIT

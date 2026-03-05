@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { cardsApi, SortMode } from '../api/cards';
+import { cardsApi, type SortMode } from '../api/cards';
 import { likesApi } from '../api/likes';
 import type { Card } from '../types/card';
 

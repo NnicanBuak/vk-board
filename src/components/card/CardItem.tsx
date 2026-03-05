@@ -1,5 +1,5 @@
 import { SimpleCell, IconButton, Caption, Link } from '@vkontakte/vkui';
-import { Icon24LikeFillRed, Icon24LikeOutline } from '@vkontakte/icons';
+import { Icon28LikeFillRed, Icon24LikeOutline } from '@vkontakte/icons';
 import type { Card } from '../../types/card';
 import { CardStatusBadge } from './CardStatusBadge';
 import { formatRelative } from '../../utils/formatDate';
@@ -26,7 +26,7 @@ export function CardItem({ card, currentUserId, isAdmin, onLike, onEdit, onDelet
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           <CardStatusBadge visible={card.status === 'selected'} />
           <IconButton onClick={onLike} label={liked ? 'Убрать лайк' : 'Лайкнуть'}>
-            {liked ? <Icon24LikeFillRed /> : <Icon24LikeOutline />}
+            {liked ? <Icon28LikeFillRed /> : <Icon24LikeOutline />}
           </IconButton>
           <Caption style={{ minWidth: 16, textAlign: 'center' }}>{card.likeCount}</Caption>
         </div>

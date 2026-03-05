@@ -61,7 +61,7 @@ export function HomePanel({ id }: Props) {
         {!error && (
           <>
             <Group
-              header={<Header aside={
+              header={<Header after={
                 <Button
                   mode="tertiary"
                   before={<Icon28AddOutline />}

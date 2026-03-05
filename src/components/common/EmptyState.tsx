@@ -12,7 +12,7 @@ export function EmptyState({ header, text, actionLabel, onAction }: Props) {
   return (
     <Placeholder
       icon={<Icon56ArticleOutline />}
-      header={header}
+      title={header}
       action={actionLabel && onAction && <Button onClick={onAction}>{actionLabel}</Button>}
     >
       {text}

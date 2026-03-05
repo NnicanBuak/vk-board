@@ -11,7 +11,7 @@ interface BridgeState {
 
 /**
  * Initializes VK Bridge, fetches user info and authenticates with the backend.
- * In development (no vk_params available), falls back to userId from env.
+ * In development (no VK context), falls back to direct userId auth.
  */
 export function useVKBridge(): BridgeState {
   const [state, setState] = useState<BridgeState>({ user: null, ready: false, error: null });
@@ -29,13 +29,16 @@ export function useVKBridge(): BridgeState {
           photo100: userInfo.photo_100,
         };
 
-        // Try to get signed launch params for backend JWT validation
+        // Try to get signed launch params for backend JWT validation.
+        // GetLaunchParamsResponse is a flat object — serialize it as-is for the server.
         try {
-          const { sign, params } = await bridge.send('VKWebAppGetLaunchParams');
-          const vk_params = new URLSearchParams({ ...(params as object), sign } as Record<string, string>).toString();
+          const launchParams = await bridge.send('VKWebAppGetLaunchParams');
+          const vk_params = new URLSearchParams(
+            Object.entries(launchParams).map(([k, v]) => [k, String(v)]),
+          ).toString();
           await authenticate({ vk_params });
         } catch {
-          // Fallback for dev environment: authenticate with userId only
+          // Fallback for localhost / dev mode without a real VK context.
           await authenticate({
             userId: user.userId,
             firstName: user.firstName,
