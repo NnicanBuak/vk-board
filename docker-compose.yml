@@ -10,6 +10,64 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U boarduser -d board_for_chat"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      DATABASE_URL: postgresql://boarduser:boardpass@db:5432/board_for_chat
+      JWT_SECRET: ${JWT_SECRET}
+      VK_SECRET: ${VK_SECRET}
+      FRONTEND_URL: http://localhost:5173
+      PORT: 3001
+      NODE_ENV: development
+      LOG_DIR: /app/logs
+    volumes:
+      - ./logs:/app/logs
+    depends_on:
+      db:
+        condition: service_healthy
+    develop:
+      watch:
+        - action: sync
+          path: ./server/src
+          target: /app/src
+        - action: rebuild
+          path: ./server/package.json
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_URL: http://localhost:3001/api
+      VITE_VK_APP_ID: ${VITE_VK_APP_ID}
+    volumes:
+      - ./logs:/app/logs
+    depends_on:
+      - backend
+    develop:
+      watch:
+        - action: sync
+          path: ./src
+          target: /app/src
+        - action: sync
+          path: ./index.html
+          target: /app/index.html
+        - action: rebuild
+          path: ./package.json
 
 volumes:
   pgdata:

@@ -9,19 +9,41 @@ interface BridgeState {
   error: string | null;
 }
 
+const DEV_USER_ID = import.meta.env.VITE_DEV_USER_ID
+  ? Number(import.meta.env.VITE_DEV_USER_ID)
+  : null;
+
 /**
  * Initializes VK Bridge, fetches user info and authenticates with the backend.
- * In development (no VK context), falls back to direct userId auth.
+ * Set VITE_DEV_USER_ID in .env.local to bypass VK Bridge entirely for local dev.
  */
 export function useVKBridge(): BridgeState {
   const [state, setState] = useState<BridgeState>({ user: null, ready: false, error: null });
 
   useEffect(() => {
     async function init() {
+      // Local dev mode: skip VK Bridge entirely.
+      if (DEV_USER_ID) {
+        const user: VKUser = {
+          userId: DEV_USER_ID,
+          firstName: 'Dev',
+          lastName: 'User',
+          photo100: '',
+        };
+        await authenticate({ userId: DEV_USER_ID, firstName: 'Dev', lastName: 'User' });
+        setState({ user, ready: true, error: null });
+        return;
+      }
+
       try {
         bridge.send('VKWebAppInit');
 
-        const userInfo = await bridge.send('VKWebAppGetUserInfo');
+        const userInfo = await Promise.race([
+          bridge.send('VKWebAppGetUserInfo'),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('VKWebAppGetUserInfo timeout')), 3000),
+          ),
+        ]);
         const user: VKUser = {
           userId: userInfo.id,
           firstName: userInfo.first_name,
