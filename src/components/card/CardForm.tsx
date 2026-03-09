@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FormItem, Input, Textarea, Button, Div } from '@vkontakte/vkui';
+import { FormItem, Input, Textarea, Button, Box } from '@vkontakte/vkui';
 import type { Card } from '../../types/card';
 
 interface FormData {
@@ -44,7 +44,7 @@ export function CardForm({ initial, onSave, onCancel }: Props) {
   };
 
   return (
-    <Div>
+    <Box>
       <FormItem top="Название *">
         <Input
           value={title}
@@ -81,11 +81,6 @@ export function CardForm({ initial, onSave, onCancel }: Props) {
           Сохранить
         </Button>
       </FormItem>
-      <FormItem>
-        <Button size="l" stretched mode="secondary" onClick={onCancel} disabled={saving}>
-          Отмена
-        </Button>
-      </FormItem>
-    </Div>
+    </Box>
   );
 }

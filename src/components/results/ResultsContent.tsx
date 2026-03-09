@@ -1,4 +1,4 @@
-import { Group, Header, SimpleCell, Caption, Button, Div } from '@vkontakte/vkui';
+import { Group, Header, SimpleCell, Caption, Button, Box } from '@vkontakte/vkui';
 import { Icon28LikeFillRed } from '@vkontakte/icons';
 import type { Card } from '../../types/card';
 
@@ -66,18 +66,18 @@ export function ResultsContent({ cards, onClose }: Props) {
       )}
 
       {top3.length === 0 && selected.length === 0 && (
-        <Div>
+        <Box>
           <Caption style={{ color: 'var(--vkui--color_text_secondary)', textAlign: 'center' }}>
             Пока нет данных для отображения
           </Caption>
-        </Div>
+        </Box>
       )}
 
-      <Div>
+      <Box>
         <Button size="l" stretched onClick={handleCopy}>
           Скопировать итог
         </Button>
-      </Div>
+      </Box>
     </>
   );
 }

@@ -9,3 +9,32 @@ body {
   background: var(--vkui--color_background, #ffffff);
   color: var(--vkui--color_text_primary, #000000);
 }
+
+.fab {
+  width: 56px !important;
+  height: 56px !important;
+  min-width: 56px;
+  min-height: 56px;
+  border-radius: 50% !important;
+  background-color: #3f8ae0 !important;
+  color: #fff !important;
+  border: none !important;
+  padding: 0 !important;
+  margin: 0;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35), 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+  -webkit-tap-highlight-color: transparent;
+  flex-shrink: 0;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.fab:active {
+  transform: scale(0.92);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.3);
+}

@@ -1,77 +1,132 @@
-import { SimpleCell, IconButton, Caption, Link } from '@vkontakte/vkui';
-import { Icon28LikeFillRed, Icon24LikeOutline } from '@vkontakte/icons';
-import type { Card } from '../../types/card';
-import { CardStatusBadge } from './CardStatusBadge';
+import { Card, Box, Headline, Caption, Link, ButtonGroup, Button } from '@vkontakte/vkui';
+import { Icon28LikeFillRed, Icon24LikeOutline, Icon16CheckCircle } from '@vkontakte/icons';
+import type { Card as CardType } from '../../types/card';
 import { formatRelative } from '../../utils/formatDate';
 
 interface Props {
-  card: Card;
+  card: CardType;
   currentUserId: number;
   isAdmin: boolean;
   onLike: () => void;
   onEdit: () => void;
   onDelete: () => void;
   onSelect: () => void;
+  onUnselect: () => void;
 }
 
-export function CardItem({ card, currentUserId, isAdmin, onLike, onEdit, onDelete, onSelect }: Props) {
+export function CardItem({ card, currentUserId, isAdmin, onLike, onEdit, onDelete, onSelect, onUnselect }: Props) {
   const liked = card.likedBy.includes(currentUserId);
   const isOwn = card.authorId === currentUserId;
   const canModify = isOwn || isAdmin;
+  const isSelected = card.status === 'selected';
 
   return (
-    <SimpleCell
-      multiline
-      after={
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <CardStatusBadge visible={card.status === 'selected'} />
-          <IconButton onClick={onLike} label={liked ? 'Убрать лайк' : 'Лайкнуть'}>
-            {liked ? <Icon28LikeFillRed /> : <Icon24LikeOutline />}
-          </IconButton>
-          <Caption style={{ minWidth: 16, textAlign: 'center' }}>{card.likeCount}</Caption>
-        </div>
-      }
-      subtitle={
-        <div>
-          <Caption>{formatRelative(card.createdAt)}</Caption>
-          {card.description && (
-            <Caption style={{ marginTop: 2, color: 'var(--vkui--color_text_secondary)' }}>
-              {card.description}
-            </Caption>
-          )}
-          {card.url && (
-            <Link href={card.url} target="_blank" style={{ fontSize: 12 }}>
-              {card.url.length > 40 ? card.url.slice(0, 40) + '…' : card.url}
-            </Link>
-          )}
-          {canModify && (
-            <div style={{ marginTop: 4, display: 'flex', gap: 8 }}>
-              <Caption
-                style={{ color: 'var(--vkui--color_text_accent)', cursor: 'pointer' }}
-                onClick={onEdit}
-              >
-                Изменить
-              </Caption>
-              <Caption
-                style={{ color: 'var(--vkui--color_text_negative)', cursor: 'pointer' }}
-                onClick={onDelete}
-              >
-                Удалить
-              </Caption>
-              {isAdmin && card.status !== 'selected' && (
-                <Caption
-                  style={{ color: 'var(--vkui--color_text_positive)', cursor: 'pointer' }}
-                  onClick={onSelect}
-                >
-                  Выбрать
-                </Caption>
-              )}
-            </div>
-          )}
-        </div>
-      }
+    <Card
+      mode="shadow"
+      style={isSelected ? { border: '1.5px solid var(--vkui--color_icon_positive)' } : undefined}
     >
-      {card.title}
-    </SimpleCell>
+      <Box style={{ padding: '12px 14px' }}>
+        {/* Заголовок + лайк + кнопка победителя */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <Headline weight="2" style={{ wordBreak: 'break-word' }}>
+              {card.title}
+            </Headline>
+            {isSelected && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                <Icon16CheckCircle style={{ color: 'var(--vkui--color_icon_positive)', flexShrink: 0 }} />
+                <Caption style={{ color: 'var(--vkui--color_icon_positive)' }}>Выбрана</Caption>
+              </div>
+            )}
+          </div>
+          <Button
+            mode="secondary"
+            size="s"
+            appearance="neutral"
+            before={
+              <span style={{ width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                {liked
+                  ? <Icon28LikeFillRed style={{ width: 24, height: 24 }} />
+                  : <Icon24LikeOutline />
+                }
+              </span>
+            }
+            onClick={(e) => { e.stopPropagation(); onLike(); }}
+            style={{ flexShrink: 0, borderRadius: 50, width: 72, justifyContent: 'center', color: liked ? 'var(--vkui--color_icon_negative)' : undefined }}
+          >
+            {card.likeCount}
+          </Button>
+        </div>
+
+        {/* Дата */}
+        <Caption style={{ color: 'var(--vkui--color_text_tertiary)', marginTop: 6 }}>
+          {formatRelative(card.createdAt)}
+        </Caption>
+
+        {/* Описание */}
+        {card.description && (
+          <Caption style={{ marginTop: 6, color: 'var(--vkui--color_text_secondary)', wordBreak: 'break-word' }}>
+            {card.description}
+          </Caption>
+        )}
+
+        {/* Ссылка */}
+        {card.url && (
+          <Link
+            href={card.url}
+            target="_blank"
+            style={{ fontSize: 12, marginTop: 6, display: 'block', wordBreak: 'break-all' }}
+          >
+            {card.url.length > 45 ? card.url.slice(0, 45) + '…' : card.url}
+          </Link>
+        )}
+
+        {/* Действия */}
+        {(canModify || isAdmin) && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
+            {canModify ? (
+              <ButtonGroup mode="horizontal" gap="s">
+                <Button
+                  mode="tertiary"
+                  size="s"
+                  onClick={(e) => { e.stopPropagation(); onEdit(); }}
+                >
+                  Изменить
+                </Button>
+                <Button
+                  mode="tertiary"
+                  size="s"
+                  appearance="negative"
+                  onClick={(e) => { e.stopPropagation(); onDelete(); }}
+                >
+                  Удалить
+                </Button>
+              </ButtonGroup>
+            ) : <div />}
+            {isAdmin && !isSelected && (
+              <Button
+                mode="primary"
+                size="s"
+                appearance="positive"
+                onClick={(e) => { e.stopPropagation(); onSelect(); }}
+              >
+                Выбрать
+              </Button>
+            )}
+            {isAdmin && isSelected && (
+              <Button
+                mode="primary"
+                size="s"
+                appearance="negative"
+                onClick={(e) => { e.stopPropagation(); onUnselect(); }}
+              >
+                Снять
+              </Button>
+            )}
+          </div>
+        )}
+
+      </Box>
+    </Card>
   );
 }
