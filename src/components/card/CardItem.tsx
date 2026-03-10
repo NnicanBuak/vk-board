@@ -39,23 +39,31 @@ export function CardItem({ card, currentUserId, isAdmin, onLike, onEdit, onDelet
               </div>
             )}
           </div>
-          <Button
-            mode="secondary"
-            size="s"
-            appearance="neutral"
-            before={
-              <span style={{ width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                {liked
-                  ? <Icon28LikeFillRed style={{ width: 24, height: 24 }} />
-                  : <Icon24LikeOutline />
-                }
-              </span>
-            }
+          <button
+            className="like-btn"
             onClick={(e) => { e.stopPropagation(); onLike(); }}
-            style={{ flexShrink: 0, borderRadius: 50, width: 72, justifyContent: 'center', color: liked ? 'var(--vkui--color_icon_negative)' : undefined }}
+            style={{
+              flexShrink: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+              width: 72, height: 32,
+              padding: '0 8px',
+              borderRadius: 50,
+              color: liked ? 'var(--vkui--color_icon_negative)' : 'var(--vkui--color_text_secondary)',
+              fontSize: 13, fontWeight: 500,
+              cursor: 'pointer',
+              WebkitTapHighlightColor: 'transparent',
+              outline: 'none',
+              boxSizing: 'border-box',
+            }}
           >
+            <span style={{ width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              {liked
+                ? <Icon28LikeFillRed style={{ width: 24, height: 24 }} />
+                : <Icon24LikeOutline />
+              }
+            </span>
             {card.likeCount}
-          </Button>
+          </button>
         </div>
 
         {/* Дата */}

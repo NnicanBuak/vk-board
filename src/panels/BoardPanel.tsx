@@ -17,7 +17,9 @@ import {
   FixedLayout,
   Caption,
   Separator,
-  Alert,
+  Subhead,
+  Text,
+  Button,
 } from '@vkontakte/vkui';
 import {
   Icon28ShareOutline,
@@ -58,7 +60,7 @@ export function BoardPanel({ id }: Props) {
   const [activeModal, setActiveModal] = useState<string | null>(null);
   const [editingCard, setEditingCard] = useState<Card | null>(null);
   const [snackbar, setSnackbar] = useState<string | null>(null);
-  const [confirmCard, setConfirmCard] = useState<{ id: string; action: 'select' | 'unselect' } | null>(null);
+  const [confirmCard, setConfirmCard] = useState<string | null>(null);
 
   const { board, loading: boardLoading, error: boardError, refresh: refreshBoard } = useBoardDetail(boardId);
   const { cards, loading: cardsLoading, error: cardsError, refresh: refreshCards, addCard, updateCard, removeCard, toggleLike } = useCards(boardId, 'date');
@@ -91,19 +93,23 @@ export function BoardPanel({ id }: Props) {
   };
 
   const handleSelect = (cardId: string) => {
-    setConfirmCard({ id: cardId, action: 'select' });
+    setConfirmCard(cardId);
   };
 
-  const handleUnselect = (cardId: string) => {
-    setConfirmCard({ id: cardId, action: 'unselect' });
+  const handleUnselect = async (cardId: string) => {
+    try {
+      await updateCard(cardId, { status: 'default' });
+    } catch (e) {
+      setSnackbar((e as Error).message);
+    }
   };
 
   const handleConfirm = async () => {
     if (!confirmCard) return;
-    const { id, action } = confirmCard;
+    const id = confirmCard;
     setConfirmCard(null);
     try {
-      await updateCard(id, { status: action === 'select' ? 'selected' : 'default' });
+      await updateCard(id, { status: 'selected' });
     } catch (e) {
       setSnackbar((e as Error).message);
     }
@@ -262,24 +268,40 @@ export function BoardPanel({ id }: Props) {
       {modal}
 
       {confirmCard && (
-        <Alert
-          actions={[
-            {
-              title: confirmCard.action === 'select' ? 'Выбрать' : 'Снять',
-              mode: 'destructive',
-              action: handleConfirm,
-            },
-            { title: 'Отмена', mode: 'cancel', action: () => setConfirmCard(null) },
-          ]}
-          actionsLayout="horizontal"
-          onClose={() => setConfirmCard(null)}
-          title={confirmCard.action === 'select' ? 'Выбрать победителя?' : 'Снять выбор?'}
-          description={
-            confirmCard.action === 'select'
-              ? 'Эта идея будет отмечена как победитель и отображена в начале страницы.'
-              : 'Идея больше не будет отображаться в списке победителей.'
-          }
-        />
+        <div
+          onClick={() => setConfirmCard(null)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 100,
+            background: 'rgba(0,0,0,0.5)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: 24,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: 'var(--vkui--color_background_modal)',
+              borderRadius: 14,
+              padding: '20px 20px 14px',
+              width: '100%',
+              maxWidth: 320,
+              boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+            }}
+          >
+            <Subhead weight="1" style={{ marginBottom: 8 }}>Выбрать победителя?</Subhead>
+            <Text style={{ color: 'var(--vkui--color_text_secondary)', marginBottom: 20 }}>
+              Эта идея будет отмечена как победитель и отображена в начале страницы.
+            </Text>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <Button mode="primary" appearance="negative" onClick={() => setConfirmCard(null)}>
+                Отмена
+              </Button>
+              <Button mode="primary" appearance="positive" onClick={handleConfirm}>
+                Выбрать
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
 
       {snackbar && <Snackbar onClose={() => setSnackbar(null)}>{snackbar}</Snackbar>}
