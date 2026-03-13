@@ -1,11 +1,23 @@
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useState, useEffect, useRef } from 'react';
+import {
+  DndContext,
+  DragOverlay,
+  MouseSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  useDroppable,
+  closestCorners,
+  type DragStartEvent,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import {
   Panel,
   PanelHeader,
   PanelHeaderBack,
   PanelHeaderButton,
-  Group,
+  PanelHeaderClose,
   Spinner,
   PullToRefresh,
   Snackbar,
@@ -13,33 +25,77 @@ import {
   ModalRoot,
   ModalPage,
   ModalPageHeader,
-  PanelHeaderClose,
   FixedLayout,
-  Caption,
-  Separator,
-  Subhead,
-  Text,
   Button,
+  FormItem,
+  Input,
+  Textarea,
 } from '@vkontakte/vkui';
 import {
-  Icon28ShareOutline,
+  Icon24LinkedOutline,
   Icon28AddOutline,
+  Icon16PenOutline,
+  Icon16Add,
 } from '@vkontakte/icons';
 import { useRouteNavigator, useParams } from '@vkontakte/vk-mini-apps-router';
-import bridge from '@vkontakte/vk-bridge';
 
 import { useBoardDetail } from '../hooks/useBoardDetail';
 import { useCards } from '../hooks/useCards';
+import { useColumns } from '../hooks/useColumns';
 import { useUser } from '../store/UserContext';
-import { CardItem } from '../components/card/CardItem';
 import { CardForm } from '../components/card/CardForm';
-import { EmptyState } from '../components/common/EmptyState';
 import { ErrorPlaceholder } from '../components/common/ErrorPlaceholder';
+import { KanbanColumn } from '../components/board/KanbanColumn';
+import { KanbanCard } from '../components/board/KanbanCard';
+import { CardDetailModal } from '../components/board/CardDetailModal';
 import { buildShareLink } from '../utils/buildShareLink';
 import { trackBoardVisit } from '../utils/recentBoards';
-import type { Card } from '../types/card';
+import { tagsApi } from '../api/tags';
+import { usePresence } from '../hooks/usePresence';
+import type { Card, Tag } from '../types/card';
+
+const AVATAR_COLORS = ['#e53935', '#8e24aa', '#1e88e5', '#00897b', '#f4511e', '#33b679', '#fb8c00', '#6d4c41'];
+function memberColor(userId: number) { return AVATAR_COLORS[userId % AVATAR_COLORS.length]; }
+
+interface BacklogProps {
+  cards: Card[];
+  currentUserId: number;
+  onCardClick: (card: Card) => void;
+  onCardLike: (cardId: string) => void;
+  onAddCard: () => void;
+}
+
+function BacklogColumn({ cards, currentUserId, onCardClick, onCardLike, onAddCard }: BacklogProps) {
+  const { setNodeRef, isOver } = useDroppable({ id: 'backlog' });
+  return (
+    <div className="kcolumn">
+      <div className="kcolumn__header">
+        <span className="kcolumn__title">Входящие</span>
+        <span className="kcolumn__count">{cards.length}</span>
+      </div>
+      <div ref={setNodeRef} className={`kcolumn__cards${isOver ? ' kcolumn__cards--over' : ''}`}>
+        <SortableContext items={cards.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+          {cards.map((card) => (
+            <KanbanCard
+              key={card.id}
+              card={card}
+              currentUserId={currentUserId}
+              onClick={() => onCardClick(card)}
+              onLike={() => onCardLike(card.id)}
+            />
+          ))}
+        </SortableContext>
+      </div>
+      <button className="kcolumn__add-btn" onClick={onAddCard}>
+        <Icon16Add /><span>Добавить</span>
+      </button>
+    </div>
+  );
+}
 
 const MODAL_CARD = 'card_form';
+const MODAL_EDIT_BOARD = 'edit_board';
+const MODAL_ADD_COLUMN = 'add_column';
 
 interface Props {
   id: string;
@@ -50,69 +106,114 @@ export function BoardPanel({ id }: Props) {
   const params = useParams<'boardId'>();
   const boardId = params?.boardId ?? '';
 
-  useEffect(() => {
-    if (boardId) trackBoardVisit(boardId);
-  }, [boardId]);
+  useEffect(() => { if (boardId) trackBoardVisit(boardId); }, [boardId]);
 
   const { user } = useUser();
   const userId = user?.userId ?? 0;
 
   const [activeModal, setActiveModal] = useState<string | null>(null);
   const [editingCard, setEditingCard] = useState<Card | null>(null);
+  const [addCardColumnId, setAddCardColumnId] = useState<string | null>(null);
+  const [selectedCard, setSelectedCard] = useState<Card | null>(null);
   const [snackbar, setSnackbar] = useState<string | null>(null);
-  const [confirmCard, setConfirmCard] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDesc, setEditDesc] = useState('');
+  const [editCover, setEditCover] = useState('');
+  const [savingBoard, setSavingBoard] = useState(false);
+  const [newColumnTitle, setNewColumnTitle] = useState('');
+  const [boardTags, setBoardTags] = useState<Tag[]>([]);
+  const [activeCard, setActiveCard] = useState<Card | null>(null);
 
-  const { board, loading: boardLoading, error: boardError, refresh: refreshBoard } = useBoardDetail(boardId);
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } }),
+  );
+  const [viewersOpen, setViewersOpen] = useState(false);
+  const viewersBtnRef = useRef<HTMLDivElement>(null);
+
+  const { board, loading: boardLoading, error: boardError, refresh: refreshBoard, updateBoard } = useBoardDetail(boardId);
   const { cards, loading: cardsLoading, error: cardsError, refresh: refreshCards, addCard, updateCard, removeCard, toggleLike } = useCards(boardId, 'date');
+  const { columns, loading: columnsLoading, refresh: refreshColumns, addColumn, renameColumn } = useColumns(boardId);
 
   const isAdmin = board?.myRole === 'admin';
-  const loading = boardLoading || cardsLoading;
+  const loading = boardLoading || cardsLoading || columnsLoading;
   const error = boardError ?? cardsError;
 
-  const participantCount = new Set(cards.map((c) => c.authorId)).size;
-  const selectedCards = cards.filter((c) => c.status === 'selected');
-  const sortedCards = [...cards].sort((a, b) =>
-    (b.status === 'selected' ? 1 : 0) - (a.status === 'selected' ? 1 : 0)
-  );
+  // Presence tracking
+  const selfInfo = user ? { firstName: user.firstName, lastName: user.lastName, photo100: user.photo100 ?? '' } : null;
+  const viewers = usePresence(boardId, selfInfo);
 
-  const handleShare = () => {
-    bridge.send('VKWebAppShare', { link: buildShareLink(boardId) }).catch(() => {});
+  // Load board tags
+  useEffect(() => {
+    if (!boardId) return;
+    tagsApi.list(boardId).then(setBoardTags).catch(() => {});
+  }, [boardId]);
+
+  // Close viewers popup on outside click
+  useEffect(() => {
+    if (!viewersOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (viewersBtnRef.current && !viewersBtnRef.current.contains(e.target as Node)) {
+        setViewersOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [viewersOpen]);
+
+  // Keep selectedCard in sync with card list updates
+  useEffect(() => {
+    if (!selectedCard) return;
+    const updated = cards.find((c) => c.id === selectedCard.id);
+    if (updated) setSelectedCard(updated);
+  }, [cards]);
+
+  const handleCopyLink = async () => {
+    const link = buildShareLink(boardId);
+    try {
+      await window.navigator.clipboard.writeText(link);
+    } catch {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = link;
+        ta.style.cssText = 'position:fixed;opacity:0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      } catch { /* silent */ }
+    }
+    setSnackbar('Ссылка на доску скопирована');
   };
 
-  const handleEdit = (card: Card) => {
-    setEditingCard(card);
+  const openEditBoard = () => {
+    setEditTitle(board?.title ?? '');
+    setEditDesc(board?.description ?? '');
+    setEditCover(board?.coverImage ?? '');
+    setActiveModal(MODAL_EDIT_BOARD);
+  };
+
+  const handleSaveBoard = async () => {
+    if (!editTitle.trim()) return;
+    setSavingBoard(true);
+    try {
+      await updateBoard({
+        title: editTitle.trim(),
+        description: editDesc.trim() || undefined,
+        coverImage: editCover.trim() || undefined,
+      });
+      setActiveModal(null);
+    } catch (e) {
+      setSnackbar((e as Error).message);
+    } finally {
+      setSavingBoard(false);
+    }
+  };
+
+  const openAddCard = (columnId: string | null = null) => {
+    setEditingCard(null);
+    setAddCardColumnId(columnId);
     setActiveModal(MODAL_CARD);
-  };
-
-  const handleDelete = async (cardId: string) => {
-    try {
-      await removeCard(cardId);
-    } catch (e) {
-      setSnackbar((e as Error).message);
-    }
-  };
-
-  const handleSelect = (cardId: string) => {
-    setConfirmCard(cardId);
-  };
-
-  const handleUnselect = async (cardId: string) => {
-    try {
-      await updateCard(cardId, { status: 'default' });
-    } catch (e) {
-      setSnackbar((e as Error).message);
-    }
-  };
-
-  const handleConfirm = async () => {
-    if (!confirmCard) return;
-    const id = confirmCard;
-    setConfirmCard(null);
-    try {
-      await updateCard(id, { status: 'selected' });
-    } catch (e) {
-      setSnackbar((e as Error).message);
-    }
   };
 
   const handleCardSave = async (data: { title: string; description?: string; url?: string }) => {
@@ -120,7 +221,7 @@ export function BoardPanel({ id }: Props) {
       if (editingCard) {
         await updateCard(editingCard.id, data);
       } else {
-        await addCard(data);
+        await addCard({ ...data, columnId: addCardColumnId });
       }
       setActiveModal(null);
       setEditingCard(null);
@@ -129,19 +230,93 @@ export function BoardPanel({ id }: Props) {
     }
   };
 
-  const openAddCard = () => {
-    setEditingCard(null);
-    setActiveModal(MODAL_CARD);
+  const handleAddColumn = async () => {
+    const title = newColumnTitle.trim();
+    if (!title) return;
+    try {
+      await addColumn(title);
+      setNewColumnTitle('');
+      setActiveModal(null);
+    } catch (e) {
+      setSnackbar((e as Error).message);
+    }
+  };
+
+  const handleMoveCard = async (cardId: string, columnId: string | null) => {
+    try {
+      await updateCard(cardId, { columnId });
+    } catch (e) {
+      setSnackbar((e as Error).message);
+    }
+  };
+
+  const handleDeleteCard = async (cardId: string) => {
+    try {
+      await removeCard(cardId);
+      setSelectedCard(null);
+    } catch (e) {
+      setSnackbar((e as Error).message);
+    }
+  };
+
+  const handleTagAssign = async (tagId: string) => {
+    if (!selectedCard) return;
+    await tagsApi.assign(selectedCard.id, tagId);
+    refreshCards();
+  };
+
+  const handleTagUnassign = async (tagId: string) => {
+    if (!selectedCard) return;
+    await tagsApi.unassign(selectedCard.id, tagId);
+    refreshCards();
+  };
+
+  const handleTagCreate = async (name: string) => {
+    if (!selectedCard) return;
+    const existing = boardTags.find((t) => t.name.toLowerCase() === name.toLowerCase());
+    if (existing) {
+      await tagsApi.assign(selectedCard.id, existing.id);
+    } else {
+      const colors = ['#e53935','#8e24aa','#1e88e5','#00897b','#f4511e','#33b679','#fb8c00'];
+      const color = colors[name.length % colors.length];
+      const tag = await tagsApi.create({ boardId, name, color });
+      setBoardTags((prev) => [...prev, tag]);
+      await tagsApi.assign(selectedCard.id, tag.id);
+    }
+    refreshCards();
+  };
+
+  // Cards without a column (backlog)
+  const uncolumnedCards = cards.filter((c) => !c.columnId);
+  const cardsForColumn = (colId: string) => cards.filter((c) => c.columnId === colId);
+
+  const handleDragStart = ({ active }: DragStartEvent) => {
+    setActiveCard(cards.find((c) => c.id === active.id) ?? null);
+  };
+
+  const handleDragEnd = ({ active, over }: DragEndEvent) => {
+    setActiveCard(null);
+    if (!over || active.id === over.id) return;
+    const dragged = cards.find((c) => c.id === active.id);
+    if (!dragged) return;
+    const overCard = cards.find((c) => c.id === over.id);
+    const overColumn = columns.find((c) => c.id === over.id);
+    let newColumnId: string | null = dragged.columnId ?? null;
+    if (over.id === 'backlog') newColumnId = null;
+    else if (overColumn) newColumnId = overColumn.id;
+    else if (overCard) newColumnId = overCard.columnId ?? null;
+    if (newColumnId !== (dragged.columnId ?? null)) {
+      handleMoveCard(String(active.id), newColumnId);
+    }
   };
 
   const modal = (
     <ModalRoot activeModal={activeModal} onClose={() => { setActiveModal(null); setEditingCard(null); }}>
       <ModalPage
         id={MODAL_CARD}
+        hideCloseButton
         header={
-          <ModalPageHeader
-            after={<PanelHeaderClose onClick={() => { setActiveModal(null); setEditingCard(null); }} />}
-          >
+          <ModalPageHeader>
             {editingCard ? 'Редактировать идею' : 'Предложить идею'}
           </ModalPageHeader>
         }
@@ -152,6 +327,78 @@ export function BoardPanel({ id }: Props) {
           onCancel={() => { setActiveModal(null); setEditingCard(null); }}
         />
       </ModalPage>
+
+      <ModalPage
+        id={MODAL_EDIT_BOARD}
+        hideCloseButton
+        header={
+          <ModalPageHeader after={<PanelHeaderClose onClick={() => setActiveModal(null)} />}>
+            Редактировать доску
+          </ModalPageHeader>
+        }
+      >
+        <Box>
+          <FormItem top="Название *">
+            <Input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} maxLength={100} />
+          </FormItem>
+          <FormItem top="Описание">
+            <Textarea
+              value={editDesc}
+              onChange={(e) => setEditDesc(e.target.value)}
+              placeholder="Необязательно"
+              maxLength={300}
+              rows={3}
+            />
+          </FormItem>
+          <FormItem top="Обложка (URL картинки)">
+            <Input
+              value={editCover}
+              onChange={(e) => setEditCover(e.target.value)}
+              placeholder="https://example.com/image.jpg"
+            />
+            {editCover.trim() && (
+              <img
+                src={`/api/images?url=${encodeURIComponent(editCover.trim())}`}
+                alt="preview"
+                style={{ marginTop: 8, width: '100%', maxHeight: 120, objectFit: 'cover', borderRadius: 8 }}
+                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+              />
+            )}
+          </FormItem>
+          <FormItem>
+            <Button size="l" stretched onClick={handleSaveBoard} disabled={!editTitle.trim() || savingBoard} loading={savingBoard}>
+              Сохранить
+            </Button>
+          </FormItem>
+        </Box>
+      </ModalPage>
+
+      <ModalPage
+        id={MODAL_ADD_COLUMN}
+        hideCloseButton
+        header={
+          <ModalPageHeader after={<PanelHeaderClose onClick={() => setActiveModal(null)} />}>
+            Новая колонка
+          </ModalPageHeader>
+        }
+      >
+        <Box>
+          <FormItem top="Название колонки">
+            <Input
+              value={newColumnTitle}
+              onChange={(e) => setNewColumnTitle(e.target.value)}
+              placeholder="Например: В работе"
+              onKeyDown={(e) => e.key === 'Enter' && handleAddColumn()}
+              autoFocus
+            />
+          </FormItem>
+          <FormItem>
+            <Button size="l" stretched onClick={handleAddColumn} disabled={!newColumnTitle.trim()}>
+              Создать
+            </Button>
+          </FormItem>
+        </Box>
+      </ModalPage>
     </ModalRoot>
   );
 
@@ -160,148 +407,183 @@ export function BoardPanel({ id }: Props) {
       <PanelHeader
         before={<PanelHeaderBack onClick={() => navigator.back()} />}
         after={
-          <PanelHeaderButton onClick={handleShare} aria-label="Поделиться">
-            <Icon28ShareOutline />
-          </PanelHeaderButton>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingRight: 4 }}>
+            {viewers.length > 0 && (
+              <div ref={viewersBtnRef} style={{ position: 'relative' }}>
+                <button
+                  className="member-avatars"
+                  onClick={() => setViewersOpen((v) => !v)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                  aria-label="Кто смотрит"
+                >
+                  {viewers.slice(0, 3).map((v) => (
+                    <div
+                      key={v.userId}
+                      className="member-avatar"
+                      style={v.photo100 ? undefined : { background: memberColor(v.userId) }}
+                    >
+                      {v.photo100 ? <img src={v.photo100} alt="" /> : v.firstName.charAt(0)}
+                    </div>
+                  ))}
+                  {viewers.length > 3 && (
+                    <div className="member-avatar member-avatar--more">+{viewers.length - 3}</div>
+                  )}
+                </button>
+
+                {viewersOpen && (
+                  <div className="viewers-popup">
+                    <div className="viewers-popup__title">Сейчас смотрят</div>
+                    {viewers.map((v) => (
+                      <button
+                        key={v.userId}
+                        className="viewers-popup__item"
+                        onClick={() => window.open(`https://vk.com/id${v.userId}`, '_blank')}
+                      >
+                        <div
+                          className="member-avatar"
+                          style={{ flexShrink: 0, ...(v.photo100 ? {} : { background: memberColor(v.userId) }) }}
+                        >
+                          {v.photo100 ? <img src={v.photo100} alt="" /> : v.firstName.charAt(0)}
+                        </div>
+                        <span>{v.firstName} {v.lastName}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            <PanelHeaderButton onClick={handleCopyLink} aria-label="Скопировать ссылку">
+              <Icon24LinkedOutline />
+            </PanelHeaderButton>
+          </div>
         }
       >
-        {board?.title ?? 'Голосование'}
+        Доска
       </PanelHeader>
 
-      <PullToRefresh onRefresh={() => { refreshBoard(); refreshCards(); }} isFetching={loading}>
+      <PullToRefresh
+        onRefresh={() => { refreshBoard(); refreshCards(); refreshColumns(); }}
+        isFetching={loading}
+      >
         {error ? (
           <ErrorPlaceholder message={error} onRetry={() => { refreshBoard(); refreshCards(); }} />
         ) : (
-          <>
-            {/* Описание + статистика */}
-            <Box style={{ paddingInline: 16, paddingTop: 10, paddingBottom: 6 }}>
-              {board?.description && (
-                <Caption style={{ color: 'var(--vkui--color_text_secondary)', display: 'block', marginBottom: 4 }}>
-                  {board.description}
-                </Caption>
-              )}
-              {!cardsLoading && cards.length > 0 && (
-                <Caption style={{ color: 'var(--vkui--color_text_tertiary)' }}>
-                  {cards.length} {cards.length === 1 ? 'идея' : cards.length < 5 ? 'идеи' : 'идей'}
-                  {participantCount > 0 && ` · ${participantCount} ${participantCount === 1 ? 'участник' : participantCount < 5 ? 'участника' : 'участников'}`}
-                </Caption>
-              )}
-            </Box>
+          <div className="page-inner">
+            {/* Second-level title */}
+            {isAdmin ? (
+              <button className="board-page-title board-page-title--editable" onClick={openEditBoard}>
+                {board?.title ?? 'Голосование'}
+                <Icon16PenOutline className="board-page-title__icon" />
+              </button>
+            ) : (
+              <h2 className="board-page-title">{board?.title ?? 'Голосование'}</h2>
+            )}
 
-            {/* Список идей */}
-            <Group>
-              {cardsLoading ? (
-                <Box style={{ display: 'flex', justifyContent: 'center', paddingTop: 32 }}>
-                  <Spinner size="l" />
-                </Box>
-              ) : cards.length === 0 ? (
-                <EmptyState
-                  header="Идей пока нет"
-                  text="Нажмите + чтобы предложить первую идею"
-                  actionLabel="Предложить идею"
-                  onAction={openAddCard}
-                />
-              ) : (
-                <div style={{ padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <AnimatePresence initial={false}>
-                    {(() => {
-                      const items: React.ReactNode[] = [];
-                      sortedCards.forEach((card, index) => {
-                        const showSeparator =
-                          selectedCards.length > 0 &&
-                          card.status !== 'selected' &&
-                          (index === 0 || sortedCards[index - 1].status === 'selected');
-                        if (showSeparator) {
-                          items.push(
-                            <motion.div
-                              key="__separator__"
-                              layout
-                              transition={{ type: 'spring', stiffness: 400, damping: 35 }}
-                            >
-                              <Separator />
-                            </motion.div>
-                          );
-                        }
-                        items.push(
-                          <motion.div
-                            key={card.id}
-                            layout
-                            transition={{ type: 'spring', stiffness: 400, damping: 35 }}
-                          >
-                            <CardItem
-                              card={card}
-                              currentUserId={userId}
-                              isAdmin={isAdmin}
-                              onLike={() => toggleLike(card.id, userId)}
-                              onEdit={() => handleEdit(card)}
-                              onDelete={() => handleDelete(card.id)}
-                              onSelect={() => handleSelect(card.id)}
-                              onUnselect={() => handleUnselect(card.id)}
-                            />
-                          </motion.div>
-                        );
-                      });
-                      return items;
-                    })()}
-                  </AnimatePresence>
+            {board?.description && (
+              <p className="board-page-desc">{board.description}</p>
+            )}
+
+            {/* Kanban board */}
+            {loading ? (
+              <Box style={{ display: 'flex', justifyContent: 'center', paddingTop: 48 }}>
+                <Spinner size="l" />
+              </Box>
+            ) : (
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCorners}
+                onDragStart={handleDragStart}
+                onDragEnd={handleDragEnd}
+              >
+                <div className="kanban">
+                  {(uncolumnedCards.length > 0 || columns.length === 0) && (
+                    <BacklogColumn
+                      cards={uncolumnedCards}
+                      currentUserId={userId}
+                      onCardClick={setSelectedCard}
+                      onCardLike={(cardId) => toggleLike(cardId, userId)}
+                      onAddCard={() => openAddCard(null)}
+                    />
+                  )}
+
+                  {columns.map((col) => (
+                    <KanbanColumn
+                      key={col.id}
+                      column={col}
+                      cards={cardsForColumn(col.id)}
+                      currentUserId={userId}
+                      isAdmin={isAdmin}
+                      onCardClick={setSelectedCard}
+                      onCardLike={(cardId) => toggleLike(cardId, userId)}
+                      onAddCard={openAddCard}
+                      onRename={isAdmin ? renameColumn : undefined}
+                    />
+                  ))}
+
+                  {isAdmin && (
+                    <div className="kcolumn kcolumn--ghost">
+                      <button
+                        className="kcolumn__new-btn"
+                        onClick={() => { setNewColumnTitle(''); setActiveModal(MODAL_ADD_COLUMN); }}
+                      >
+                        <Icon16Add />
+                        <span>Новая колонка</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
-              )}
-            </Group>
 
-            {/* Отступ под FAB */}
+                <DragOverlay dropAnimation={{ duration: 200, easing: 'ease' }}>
+                  {activeCard && (
+                    <KanbanCard
+                      card={activeCard}
+                      currentUserId={userId}
+                      isOverlay
+                    />
+                  )}
+                </DragOverlay>
+              </DndContext>
+            )}
+
             <div style={{ height: 88 }} />
-          </>
+          </div>
         )}
       </PullToRefresh>
 
-      {/* FAB */}
+      {/* FAB — add card without column */}
       {!error && (
         <FixedLayout vertical="bottom">
-          <Box style={{ display: 'flex', justifyContent: 'flex-end', paddingRight: 16, paddingBottom: 'max(20px, env(safe-area-inset-bottom))' }}>
-            <button className="fab" onClick={openAddCard} aria-label="Предложить идею">
-              <Icon28AddOutline />
-            </button>
-          </Box>
+          <div className="page-inner">
+            <Box style={{ display: 'flex', justifyContent: 'flex-end', paddingRight: 16, paddingBottom: 'max(20px, env(safe-area-inset-bottom))' }}>
+              <button className="fab" onClick={() => openAddCard(null)} aria-label="Предложить идею">
+                <Icon28AddOutline />
+              </button>
+            </Box>
+          </div>
         </FixedLayout>
       )}
 
       {modal}
 
-      {confirmCard && (
-        <div
-          onClick={() => setConfirmCard(null)}
-          style={{
-            position: 'fixed', inset: 0, zIndex: 100,
-            background: 'rgba(0,0,0,0.5)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            padding: 24,
+      {/* Full-screen card detail */}
+      {selectedCard && (
+        <CardDetailModal
+          card={selectedCard}
+          columns={columns}
+          boardTags={boardTags}
+          currentUserId={userId}
+          isAdmin={isAdmin}
+          onClose={() => setSelectedCard(null)}
+          onLike={() => toggleLike(selectedCard.id, userId)}
+          onMoveColumn={(columnId) => handleMoveCard(selectedCard.id, columnId)}
+          onDelete={() => handleDeleteCard(selectedCard.id)}
+          onUpdate={async (data) => {
+            await updateCard(selectedCard.id, data);
           }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              background: 'var(--vkui--color_background_modal)',
-              borderRadius: 14,
-              padding: '20px 20px 14px',
-              width: '100%',
-              maxWidth: 320,
-              boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
-            }}
-          >
-            <Subhead weight="1" style={{ marginBottom: 8 }}>Выбрать победителя?</Subhead>
-            <Text style={{ color: 'var(--vkui--color_text_secondary)', marginBottom: 20 }}>
-              Эта идея будет отмечена как победитель и отображена в начале страницы.
-            </Text>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <Button mode="primary" appearance="negative" onClick={() => setConfirmCard(null)}>
-                Отмена
-              </Button>
-              <Button mode="primary" appearance="positive" onClick={handleConfirm}>
-                Выбрать
-              </Button>
-            </div>
-          </div>
-        </div>
+          onTagAssign={handleTagAssign}
+          onTagUnassign={handleTagUnassign}
+          onTagCreate={handleTagCreate}
+        />
       )}
 
       {snackbar && <Snackbar onClose={() => setSnackbar(null)}>{snackbar}</Snackbar>}

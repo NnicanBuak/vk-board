@@ -17,33 +17,62 @@ enum BoardRoleType {
   member
 }
 
+enum BoardType {
+  voting
+  kanban
+  brainstorm
+  retro
+}
+
 model Board {
   id          String      @id @default(uuid())
   title       String
   description String?
+  coverImage  String?     @map("cover_image")
+  boardType   BoardType   @default(voting) @map("board_type")
   chatId      String?     @map("chat_id")
   creatorId   Int         @map("creator_id")
   createdAt   DateTime    @default(now()) @map("created_at")
 
   cards       Card[]
   roles       BoardRole[]
+  columns     Column[]
+  tags        Tag[]
 
   @@map("boards")
+}
+
+model Column {
+  id        String   @id @default(uuid())
+  boardId   String   @map("board_id")
+  title     String
+  order     Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  board     Board    @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  cards     Card[]
+
+  @@map("columns")
 }
 
 model Card {
   id          String      @id @default(uuid())
   boardId     String      @map("board_id")
+  columnId    String?     @map("column_id")
   authorId    Int         @map("author_id")
   title       String
   description String?
   url         String?
   imageUrl    String?     @map("image_url")
   status      CardStatus  @default(default)
+  order       Int         @default(0)
   createdAt   DateTime    @default(now()) @map("created_at")
 
   board       Board       @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  column      Column?     @relation(fields: [columnId], references: [id], onDelete: SetNull)
   likes       Like[]
+  comments    Comment[]
+  tags        CardTag[]
 
   @@map("cards")
 }
@@ -58,6 +87,42 @@ model Like {
 
   @@unique([cardId, userId])
   @@map("likes")
+}
+
+model Comment {
+  id        String   @id @default(uuid())
+  cardId    String   @map("card_id")
+  userId    Int      @map("user_id")
+  text      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  card      Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  @@map("comments")
+}
+
+model Tag {
+  id      String    @id @default(uuid())
+  boardId String    @map("board_id")
+  name    String
+  color   String    @default("#6c757d")
+
+  board   Board     @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  cards   CardTag[]
+
+  @@unique([boardId, name])
+  @@map("tags")
+}
+
+model CardTag {
+  cardId String @map("card_id")
+  tagId  String @map("tag_id")
+
+  card   Card   @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([cardId, tagId])
+  @@map("card_tags")
 }
 
 model BoardRole {

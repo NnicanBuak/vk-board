@@ -1,0 +1,51 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-boarduser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-boardpass}
+      POSTGRES_DB: ${POSTGRES_DB:-board_for_chat}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-boarduser} -d ${POSTGRES_DB:-board_for_chat}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    image: ghcr.io/${GITHUB_REPO}/backend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    stop_grace_period: 30s
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-boarduser}:${POSTGRES_PASSWORD:-boardpass}@db:5432/${POSTGRES_DB:-board_for_chat}
+      JWT_SECRET: ${JWT_SECRET}
+      VK_SECRET: ${VK_SECRET}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
+      PORT: 3001
+      NODE_ENV: production
+      LOG_DIR: /app/logs
+    volumes:
+      - ./logs:/app/logs
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3001/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  frontend:
+    image: ghcr.io/${GITHUB_REPO}/frontend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  pgdata:

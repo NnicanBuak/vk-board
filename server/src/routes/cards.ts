@@ -5,7 +5,6 @@ import { requireAuth } from '../middleware/auth';
 const router = Router();
 router.use(requireAuth);
 
-/** Resolve current user's role on a board. Returns null if not a member. */
 async function getRole(boardId: string, userId: number) {
   const entry = await prisma.boardRole.findUnique({
     where: { boardId_userId: { boardId, userId } },
@@ -13,35 +12,48 @@ async function getRole(boardId: string, userId: number) {
   return entry?.role ?? null;
 }
 
-// GET /api/cards?boardId=&sort=likes|date
+function formatCard(c: any) {
+  return {
+    ...c,
+    likeCount: c.likes.length,
+    likedBy: c.likes.map((l: any) => l.userId),
+    tags: c.tags?.map((ct: any) => ct.tag) ?? [],
+    likes: undefined,
+  };
+}
+
+const cardInclude = {
+  likes: { select: { userId: true } },
+  tags: { include: { tag: true } },
+};
+
+// GET /api/cards?boardId=&sort=likes|date&columnId=
 router.get('/', async (req: Request, res: Response): Promise<void> => {
   const userId = req.user!.userId;
-  const { boardId, sort } = req.query as { boardId?: string; sort?: string };
+  const { boardId, sort, columnId } = req.query as {
+    boardId?: string;
+    sort?: string;
+    columnId?: string;
+  };
 
-  if (!boardId) {
-    res.status(400).json({ error: 'boardId is required' });
-    return;
-  }
+  if (!boardId) { res.status(400).json({ error: 'boardId is required' }); return; }
 
   const role = await getRole(boardId, userId);
-  if (!role) {
-    res.status(403).json({ error: 'Access denied' });
-    return;
-  }
+  if (!role) { res.status(403).json({ error: 'Access denied' }); return; }
 
   const cards = await prisma.card.findMany({
-    where: { boardId },
-    include: { likes: { select: { userId: true } } },
-    orderBy: sort === 'likes' ? undefined : { createdAt: 'desc' },
+    where: {
+      boardId,
+      ...(columnId !== undefined
+        ? { columnId: columnId === 'null' ? null : columnId }
+        : {}),
+    },
+    include: cardInclude,
+    orderBy: sort === 'likes' ? undefined : [{ order: 'asc' }, { createdAt: 'desc' }],
   });
 
   const result = cards
-    .map((c) => ({
-      ...c,
-      likeCount: c.likes.length,
-      likedBy: c.likes.map((l) => l.userId),
-      likes: undefined,
-    }))
+    .map(formatCard)
     .sort(sort === 'likes' ? (a, b) => b.likeCount - a.likeCount : () => 0);
 
   res.json(result);
@@ -50,8 +62,9 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
 // POST /api/cards
 router.post('/', async (req: Request, res: Response): Promise<void> => {
   const userId = req.user!.userId;
-  const { boardId, title, description, url, imageUrl } = req.body as {
+  const { boardId, columnId, title, description, url, imageUrl } = req.body as {
     boardId?: string;
+    columnId?: string;
     title?: string;
     description?: string;
     url?: string;
@@ -64,52 +77,52 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
   }
 
   const role = await getRole(boardId, userId);
-  if (!role) {
-    res.status(403).json({ error: 'Access denied' });
-    return;
-  }
+  if (!role) { res.status(403).json({ error: 'Access denied' }); return; }
+
+  const last = await prisma.card.findFirst({
+    where: { boardId, columnId: columnId ?? null },
+    orderBy: { order: 'desc' },
+  });
 
   const card = await prisma.card.create({
     data: {
       boardId,
+      columnId: columnId ?? null,
       authorId: userId,
       title: title.trim(),
       description: description?.trim() ?? null,
       url: url?.trim() ?? null,
       imageUrl: imageUrl?.trim() ?? null,
+      order: (last?.order ?? -1) + 1,
     },
+    include: cardInclude,
   });
 
-  res.status(201).json({ ...card, likeCount: 0, likedBy: [] });
+  res.status(201).json(formatCard(card));
 });
 
 // PATCH /api/cards/:id
 router.patch('/:id', async (req: Request, res: Response): Promise<void> => {
   const userId = req.user!.userId;
   const { id } = req.params;
-  const { title, description, url, imageUrl, status } = req.body as {
+  const { title, description, url, imageUrl, status, columnId, order } = req.body as {
     title?: string;
     description?: string;
     url?: string;
     imageUrl?: string;
     status?: 'default' | 'selected';
+    columnId?: string | null;
+    order?: number;
   };
 
   const card = await prisma.card.findUnique({ where: { id } });
-  if (!card) {
-    res.status(404).json({ error: 'Card not found' });
-    return;
-  }
+  if (!card) { res.status(404).json({ error: 'Card not found' }); return; }
 
   const role = await getRole(card.boardId, userId);
   const isAuthor = card.authorId === userId;
   const isAdmin = role === 'admin';
 
-  // Only author or admin can edit content; only admin can set status
-  if (!isAuthor && !isAdmin) {
-    res.status(403).json({ error: 'Access denied' });
-    return;
-  }
+  if (!isAuthor && !isAdmin) { res.status(403).json({ error: 'Access denied' }); return; }
   if (status !== undefined && !isAdmin) {
     res.status(403).json({ error: 'Only admin can change card status' });
     return;
@@ -123,16 +136,13 @@ router.patch('/:id', async (req: Request, res: Response): Promise<void> => {
       ...(url !== undefined && { url: url.trim() || null }),
       ...(imageUrl !== undefined && { imageUrl: imageUrl.trim() || null }),
       ...(status !== undefined && { status }),
+      ...(columnId !== undefined && { columnId: columnId }),
+      ...(order !== undefined && { order }),
     },
-    include: { likes: { select: { userId: true } } },
+    include: cardInclude,
   });
 
-  res.json({
-    ...updated,
-    likeCount: updated.likes.length,
-    likedBy: updated.likes.map((l) => l.userId),
-    likes: undefined,
-  });
+  res.json(formatCard(updated));
 });
 
 // DELETE /api/cards/:id
@@ -141,10 +151,7 @@ router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params;
 
   const card = await prisma.card.findUnique({ where: { id } });
-  if (!card) {
-    res.status(404).json({ error: 'Card not found' });
-    return;
-  }
+  if (!card) { res.status(404).json({ error: 'Card not found' }); return; }
 
   const role = await getRole(card.boardId, userId);
   if (card.authorId !== userId && role !== 'admin') {

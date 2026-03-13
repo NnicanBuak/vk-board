@@ -25,9 +25,9 @@ export function useCards(boardId: string, sort: SortMode) {
   useEffect(() => { load(); }, [load]);
 
   const addCard = useCallback(
-    async (data: { title: string; description?: string; url?: string }) => {
+    async (data: { title: string; description?: string; url?: string; columnId?: string | null }) => {
       const card = await cardsApi.create({ boardId, ...data });
-      setState((s) => ({ ...s, cards: [card, ...s.cards] }));
+      setState((s) => ({ ...s, cards: [...s.cards, card] }));
       return card;
     },
     [boardId],

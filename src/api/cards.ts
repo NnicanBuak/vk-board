@@ -9,6 +9,7 @@ export const cardsApi = {
 
   create: (data: {
     boardId: string;
+    columnId?: string | null;
     title: string;
     description?: string;
     url?: string;
@@ -17,7 +18,15 @@ export const cardsApi = {
 
   update: (
     id: string,
-    data: { title?: string; description?: string; url?: string; imageUrl?: string; status?: CardStatus },
+    data: {
+      title?: string;
+      description?: string;
+      url?: string;
+      imageUrl?: string;
+      status?: CardStatus;
+      columnId?: string | null;
+      order?: number;
+    },
   ) => api.patch<Card>(`/cards/${id}`, data),
 
   delete: (id: string) => api.delete<void>(`/cards/${id}`),

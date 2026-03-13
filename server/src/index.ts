@@ -6,6 +6,10 @@ import boardsRouter from './routes/boards';
 import cardsRouter from './routes/cards';
 import likesRouter from './routes/likes';
 import authRouter from './routes/auth';
+import imagesRouter from './routes/images';
+import columnsRouter from './routes/columns';
+import commentsRouter from './routes/comments';
+import tagsRouter from './routes/tags';
 
 // File logger: writes to backend-latest.log (overwrite) and backend-YYYY-MM-DD.log (append).
 // In Docker WORKDIR=/app, volume at /app/logs; locally go up one level.
@@ -30,10 +34,16 @@ app.use(express.json());
 // Log every request.
 app.use((req, _res, next) => { console.log(`${req.method} ${req.path}`); next(); });
 
+// Open routes (no auth)
+app.use('/api/images', imagesRouter);
+
 app.use('/api/auth', authRouter);
 app.use('/api/boards', boardsRouter);
 app.use('/api/cards', cardsRouter);
 app.use('/api/likes', likesRouter);
+app.use('/api/columns', columnsRouter);
+app.use('/api/comments', commentsRouter);
+app.use('/api/tags', tagsRouter);
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' });

@@ -14,7 +14,7 @@ interface Props {
   onCancel: () => void;
 }
 
-export function CardForm({ initial, onSave, onCancel }: Props) {
+export function CardForm({ initial, onSave, onCancel: _onCancel }: Props) {
   const [title, setTitle] = useState(initial?.title ?? '');
   const [description, setDescription] = useState(initial?.description ?? '');
   const [url, setUrl] = useState(initial?.url ?? '');
