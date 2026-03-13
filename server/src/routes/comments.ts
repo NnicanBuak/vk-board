@@ -59,7 +59,7 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
 // DELETE /api/comments/:id — author or board admin
 router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
   const userId = req.user!.userId;
-  const { id } = req.params;
+  const { id } = req.params as { id: string };
 
   const comment = await prisma.comment.findUnique({
     where: { id },

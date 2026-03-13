@@ -55,7 +55,7 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
 // DELETE /api/tags/:id — admin only
 router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
   const userId = req.user!.userId;
-  const { id } = req.params;
+  const { id } = req.params as { id: string };
 
   const tag = await prisma.tag.findUnique({ where: { id } });
   if (!tag) { res.status(404).json({ error: 'Tag not found' }); return; }

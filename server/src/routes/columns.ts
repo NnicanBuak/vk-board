@@ -58,7 +58,7 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
 // PATCH /api/columns/:id — rename or reorder (admin only)
 router.patch('/:id', async (req: Request, res: Response): Promise<void> => {
   const userId = req.user!.userId;
-  const { id } = req.params;
+  const { id } = req.params as { id: string };
   const { title, order } = req.body as { title?: string; order?: number };
 
   const column = await prisma.column.findUnique({ where: { id } });
@@ -81,7 +81,7 @@ router.patch('/:id', async (req: Request, res: Response): Promise<void> => {
 // DELETE /api/columns/:id — admin only, cards move to null column
 router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
   const userId = req.user!.userId;
-  const { id } = req.params;
+  const { id } = req.params as { id: string };
 
   const column = await prisma.column.findUnique({ where: { id } });
   if (!column) { res.status(404).json({ error: 'Column not found' }); return; }

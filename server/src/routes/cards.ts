@@ -104,7 +104,7 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
 // PATCH /api/cards/:id
 router.patch('/:id', async (req: Request, res: Response): Promise<void> => {
   const userId = req.user!.userId;
-  const { id } = req.params;
+  const { id } = req.params as { id: string };
   const { title, description, url, imageUrl, status, columnId, order } = req.body as {
     title?: string;
     description?: string;
@@ -148,7 +148,7 @@ router.patch('/:id', async (req: Request, res: Response): Promise<void> => {
 // DELETE /api/cards/:id
 router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
   const userId = req.user!.userId;
-  const { id } = req.params;
+  const { id } = req.params as { id: string };
 
   const card = await prisma.card.findUnique({ where: { id } });
   if (!card) { res.status(404).json({ error: 'Card not found' }); return; }

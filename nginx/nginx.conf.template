@@ -1,3 +1,11 @@
+# Drop requests for unknown hosts (IP access, other vhosts)
+server {
+    listen 80  default_server;
+    listen 443 default_server ssl;
+    ssl_reject_handshake on;
+    return 444;
+}
+
 upstream backend {
     server backend:3001;
     keepalive 32;

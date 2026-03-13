@@ -13,7 +13,7 @@ const PRESENCE_TTL = 90_000; // 90 s
 // PUT /api/boards/:id/presence — heartbeat (upsert)
 router.put('/:id/presence', (req: Request, res: Response): void => {
   const userId = req.user!.userId;
-  const { id } = req.params;
+  const { id } = req.params as { id: string };
   const { firstName = '', lastName = '', photo100 = '' } = req.body as Partial<PresenceUser>;
   if (!boardPresence.has(id)) boardPresence.set(id, new Map());
   boardPresence.get(id)!.set(userId, { userId, firstName, lastName, photo100, ts: Date.now() });
@@ -23,14 +23,14 @@ router.put('/:id/presence', (req: Request, res: Response): void => {
 // DELETE /api/boards/:id/presence — leave
 router.delete('/:id/presence', (req: Request, res: Response): void => {
   const userId = req.user!.userId;
-  boardPresence.get(req.params.id)?.delete(userId);
+  boardPresence.get(req.params.id as string)?.delete(userId);
   res.status(204).send();
 });
 
 // GET /api/boards/:id/presence — current viewers
 router.get('/:id/presence', (req: Request, res: Response): void => {
   const now = Date.now();
-  const users = Array.from(boardPresence.get(req.params.id)?.values() ?? [])
+  const users = Array.from(boardPresence.get(req.params.id as string)?.values() ?? [])
     .filter((u) => now - u.ts < PRESENCE_TTL)
     .map(({ userId, firstName, lastName, photo100 }) => ({ userId, firstName, lastName, photo100 }));
   res.json(users);
@@ -91,7 +91,7 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
 // GET /api/boards/:id — board details + current user role
 router.get('/:id', async (req: Request, res: Response): Promise<void> => {
   const userId = req.user!.userId;
-  const { id } = req.params;
+  const { id } = req.params as { id: string };
 
   const board = await prisma.board.findUnique({ where: { id } });
   if (!board) {
@@ -112,7 +112,7 @@ router.get('/:id', async (req: Request, res: Response): Promise<void> => {
 // PATCH /api/boards/:id — update fields, only admin allowed
 router.patch('/:id', async (req: Request, res: Response): Promise<void> => {
   const userId = req.user!.userId;
-  const { id } = req.params;
+  const { id } = req.params as { id: string };
   const { title, description, coverImage, boardType } = req.body as {
     title?: string;
     description?: string;
@@ -143,7 +143,7 @@ router.patch('/:id', async (req: Request, res: Response): Promise<void> => {
 
 // GET /api/boards/:id/members — list of users with roles
 router.get('/:id/members', async (req: Request, res: Response): Promise<void> => {
-  const { id } = req.params;
+  const { id } = req.params as { id: string };
   const roles = await prisma.boardRole.findMany({
     where: { boardId: id },
     select: { userId: true, role: true },
@@ -154,7 +154,7 @@ router.get('/:id/members', async (req: Request, res: Response): Promise<void> =>
 // DELETE /api/boards/:id — only creator (admin) can delete
 router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
   const userId = req.user!.userId;
-  const { id } = req.params;
+  const { id } = req.params as { id: string };
 
   const board = await prisma.board.findUnique({ where: { id } });
   if (!board) {
