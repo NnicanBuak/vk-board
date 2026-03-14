@@ -1,4 +1,4 @@
-name: Deploy to Server
+name: Deploy Backend
 
 on:
   push:
@@ -12,22 +12,37 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy on server
+      - name: Deploy backend on server
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USERNAME }}
           key: ${{ secrets.SERVER_KEY }}
-          port: ${{ secrets.SERVER_PORT || 22 }}
+          port: 22
           script: |
+            set -e
+
+            # Clone repo if not exists
+            if [ ! -d /opt/vk-mini-app ]; then
+              git clone https://github.com/${{ github.repository }} /opt/vk-mini-app
+            fi
+
             cd /opt/vk-mini-app
             git pull origin main
-            cat > .env <<EOF
+
+            # Write .env for backend
+            cat > server/.env <<EOF
             JWT_SECRET=${{ secrets.JWT_SECRET }}
             VK_SECRET=${{ secrets.VK_SECRET }}
-            VITE_VK_APP_ID=${{ secrets.VITE_VK_APP_ID }}
-            VITE_API_URL=${{ secrets.VITE_API_URL }}
             EOF
-            docker compose build --no-cache
-            docker compose up -d --remove-orphans
-            docker image prune -f
+
+            cd server
+            npm ci --omit=dev
+            npm run build
+            npx prisma migrate deploy
+
+            # Start or restart with PM2
+            pm2 describe vk-board-api > /dev/null 2>&1 \
+              && pm2 restart vk-board-api \
+              || pm2 start dist/index.js --name vk-board-api
+            pm2 save
