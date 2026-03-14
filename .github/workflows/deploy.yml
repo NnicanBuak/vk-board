@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - master
+      - dev
 
 jobs:
   deploy:
@@ -28,7 +29,7 @@ jobs:
             fi
 
             cd /opt/vk-mini-app
-            git pull origin main
+            git pull origin ${{ github.ref_name }}
 
             # Write .env for backend
             cat > server/.env <<EOF
