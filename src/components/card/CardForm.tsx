@@ -81,6 +81,11 @@ export function CardForm({ initial, onSave, onCancel }: Props) {
           Сохранить
         </Button>
       </FormItem>
+      <FormItem>
+        <Button size="l" stretched mode="secondary" onClick={onCancel} disabled={saving}>
+          Отмена
+        </Button>
+      </FormItem>
     </Box>
   );
 }
