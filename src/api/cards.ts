@@ -26,6 +26,8 @@ export const cardsApi = {
       status?: CardStatus;
       columnId?: string | null;
       order?: number;
+      assignees?: number[];
+      dueDate?: string | null;
     },
   ) => api.patch<Card>(`/cards/${id}`, data),
 
