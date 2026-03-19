@@ -17,13 +17,15 @@ interface Props {
   card: Card;
   columns: Column[];
   boardTags: Tag[];
+  boardMembers: { userId: number; role: string }[];
   currentUserId: number;
   isAdmin: boolean;
+  canEdit: boolean;
   onClose: () => void;
   onLike: () => void;
   onMoveColumn: (columnId: string | null) => void;
   onDelete: () => void;
-  onUpdate: (data: { title?: string; description?: string; url?: string }) => Promise<void>;
+  onUpdate: (data: { title?: string; description?: string; url?: string; assignees?: number[]; dueDate?: string | null }) => Promise<void>;
   onTagAssign: (tagId: string) => Promise<void>;
   onTagUnassign: (tagId: string) => Promise<void>;
   onTagCreate: (name: string) => Promise<void>;
@@ -33,8 +35,10 @@ export function CardDetailModal({
   card,
   columns,
   boardTags,
+  boardMembers,
   currentUserId,
   isAdmin,
+  canEdit,
   onClose,
   onLike,
   onMoveColumn,
@@ -55,7 +59,7 @@ export function CardDetailModal({
   const tagWrapRef = useRef<HTMLDivElement>(null);
   const commentInputRef = useRef<HTMLTextAreaElement>(null);
   const liked = card.likedBy.includes(currentUserId);
-  const canEditTags = isAdmin || card.authorId === currentUserId;
+  const canEditTags = canEdit || card.authorId === currentUserId;
 
   const tagSuggestions = boardTags.filter(
     (t) => !card.tags.some((ct) => ct.id === t.id) &&
@@ -258,6 +262,52 @@ export function CardDetailModal({
                 )
               )}
             </div>
+          </div>
+
+          {/* Assignees */}
+          {boardMembers.length > 0 && (
+            <div className="cdm__section">
+              <div className="cdm__section-label">Исполнители</div>
+              <div className="cdm__assignees">
+                {boardMembers.map((m) => {
+                  const assigned = card.assignees.includes(m.userId);
+                  return (
+                    <button
+                      key={m.userId}
+                      className={`cdm__assignee-btn${assigned ? ' cdm__assignee-btn--active' : ''}`}
+                      onClick={() => {
+                        if (!canEdit) return;
+                        const next = assigned
+                          ? card.assignees.filter((id) => id !== m.userId)
+                          : [...card.assignees, m.userId];
+                        onUpdate({ assignees: next });
+                      }}
+                      disabled={!canEdit}
+                    >
+                      <div className="cdm__assignee-avatar">
+                        {String(m.userId).slice(-1)}
+                      </div>
+                      <span className="cdm__assignee-name">
+                        {m.userId === currentUserId ? 'Вы' : `ID ${m.userId}`}
+                      </span>
+                      {assigned && <span className="cdm__assignee-check">✓</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Due date */}
+          <div className="cdm__section">
+            <div className="cdm__section-label">Дедлайн</div>
+            <input
+              type="date"
+              className="cdm__date-input"
+              value={card.dueDate ? card.dueDate.slice(0, 10) : ''}
+              onChange={(e) => canEdit && onUpdate({ dueDate: e.target.value || null })}
+              disabled={!canEdit}
+            />
           </div>
 
           {/* Column (move) */}

@@ -3,6 +3,20 @@ import { CSS } from '@dnd-kit/utilities';
 import { Icon16Like, Icon16LikeOutline } from '@vkontakte/icons';
 import type { Card } from '../../types/card';
 
+const AVATAR_COLORS = ['#e53935', '#8e24aa', '#1e88e5', '#00897b', '#f4511e', '#33b679', '#fb8c00'];
+function assigneeColor(uid: number) { return AVATAR_COLORS[uid % AVATAR_COLORS.length]; }
+
+function isOverdue(dueDate: string) { return new Date(dueDate) < new Date(); }
+function isDueSoon(dueDate: string) {
+  const d = new Date(dueDate);
+  const now = new Date();
+  return d >= now && d.getTime() - now.getTime() < 3 * 24 * 60 * 60 * 1000;
+}
+function formatDueDate(dueDate: string) {
+  const d = new Date(dueDate);
+  return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+}
+
 interface Props {
   card: Card;
   currentUserId: number;
@@ -66,6 +80,27 @@ export function KanbanCard({ card, currentUserId, onClick, onLike, isOverlay = f
         {card.status === 'selected' && (
           <span className="kcard__winner">Победитель</span>
         )}
+
+        <div className="kcard__meta">
+          {card.dueDate && (
+            <span className={`kcard__due${isDueSoon(card.dueDate) ? ' kcard__due--soon' : ''}${isOverdue(card.dueDate) ? ' kcard__due--overdue' : ''}`}>
+              {formatDueDate(card.dueDate)}
+            </span>
+          )}
+          {card.assignees.length > 0 && (
+            <div className="kcard__assignees">
+              {card.assignees.slice(0, 3).map((uid) => (
+                <div key={uid} className="kcard__assignee" style={{ background: assigneeColor(uid) }}>
+                  {String(uid).slice(-1)}
+                </div>
+              ))}
+              {card.assignees.length > 3 && (
+                <div className="kcard__assignee kcard__assignee--more">+{card.assignees.length - 3}</div>
+              )}
+            </div>
+          )}
+        </div>
+
         <button
           className={`kcard__like${liked ? ' kcard__like--active' : ''}`}
           onClick={(e) => { e.stopPropagation(); onLike?.(); }}
