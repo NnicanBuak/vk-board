@@ -21,10 +21,9 @@ function pickGradient(id: string): string {
 }
 
 const TYPE_LABELS: Record<BoardType, string> = {
-  voting:    '🗳 Голосование',
-  kanban:    '📋 Задачи',
-  brainstorm:'🧠 Штурм',
-  retro:     '🔄 Ретро',
+  kanban:    '📋 Kanban',
+  brainstorm:'🧠 Брейншторм',
+  notes:     '📓 Заметки',
 };
 
 interface Props {
