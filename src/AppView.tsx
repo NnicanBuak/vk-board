@@ -5,6 +5,7 @@ import { useRegisterSW } from 'virtual:pwa-register/react';
 import { PANELS } from './router/routes';
 import { HomePanel } from './panels/HomePanel';
 import { BoardPanel } from './panels/BoardPanel';
+import { BoardAccessPanel } from './panels/BoardAccessPanel';
 import { UpdateBanner } from './components/common/UpdateBanner';
 
 export function AppView() {
@@ -22,6 +23,7 @@ export function AppView() {
         <View activePanel={panel ?? PANELS.HOME}>
           <HomePanel id={PANELS.HOME} />
           <BoardPanel id={PANELS.BOARD} />
+          <BoardAccessPanel id={PANELS.BOARD_ACCESS} />
         </View>
       </SplitCol>
       {needRefresh && (

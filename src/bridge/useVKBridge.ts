@@ -9,13 +9,11 @@ interface BridgeState {
   error: string | null;
 }
 
-const DEV_USER_ID = import.meta.env.VITE_DEV_USER_ID
-  ? Number(import.meta.env.VITE_DEV_USER_ID)
-  : null;
+const DEV_USER_ID = import.meta.env.DEV ? 1 : null;
 
 /**
  * Initializes VK Bridge, fetches user info and authenticates with the backend.
- * Set VITE_DEV_USER_ID in .env.local to bypass VK Bridge entirely for local dev.
+ * In dev mode (NODE_ENV=development) bypasses VK Bridge entirely with userId=1.
  */
 export function useVKBridge(): BridgeState {
   const [state, setState] = useState<BridgeState>({ user: null, ready: false, error: null });

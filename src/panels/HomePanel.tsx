@@ -28,11 +28,10 @@ import { ErrorPlaceholder } from '../components/common/ErrorPlaceholder';
 import { getRecentBoardIds } from '../utils/recentBoards';
 import type { Board, BoardType } from '../types/board';
 
-const BOARD_TYPES: { value: BoardType; label: string }[] = [
-  { value: 'voting',    label: '🗳 Голосование' },
-  { value: 'kanban',    label: '📋 Задачи' },
-  { value: 'brainstorm',label: '🧠 Штурм' },
-  { value: 'retro',     label: '🔄 Ретро' },
+const BOARD_TYPES: { value: BoardType; label: string; desc: string }[] = [
+  { value: 'kanban',    label: '📋 Kanban',      desc: 'Колонки и задачи с исполнителями и дедлайнами' },
+  { value: 'brainstorm',label: '🧠 Брейншторм',  desc: 'Сетка идей с голосованием, без колонок' },
+  { value: 'notes',     label: '📓 Заметки',     desc: 'Страницы с форматированным текстом, как в Notion' },
 ];
 
 const MODAL_CREATE = 'create_board';
@@ -50,7 +49,7 @@ export function HomePanel({ id }: Props) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [coverImage, setCoverImage] = useState('');
-  const [boardType, setBoardType] = useState<BoardType>('voting');
+  const [boardType, setBoardType] = useState<BoardType>('kanban');
   const [creating, setCreating] = useState(false);
   const [snackbar, setSnackbar] = useState<string | null>(null);
 
@@ -58,7 +57,7 @@ export function HomePanel({ id }: Props) {
     setTitle('Новая доска');
     setDescription('');
     setCoverImage('');
-    setBoardType('voting');
+    setBoardType('kanban');
     setActiveModal(MODAL_CREATE);
   };
 
@@ -141,27 +140,38 @@ export function HomePanel({ id }: Props) {
             )}
           </FormItem>
           <FormItem top="Тип доски">
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {BOARD_TYPES.map((t) => (
-                <button
-                  key={t.value}
-                  onClick={() => setBoardType(t.value)}
-                  style={{
-                    padding: '6px 12px',
-                    borderRadius: 20,
-                    border: '1.5px solid',
-                    borderColor: boardType === t.value ? 'var(--vkui--color_text_accent)' : 'var(--vkui--color_separator_primary)',
-                    background: boardType === t.value ? 'var(--vkui--color_text_accent)' : 'transparent',
-                    color: boardType === t.value ? '#fff' : 'var(--vkui--color_text_secondary)',
-                    fontSize: 13,
-                    cursor: 'pointer',
-                    fontFamily: 'inherit',
-                    transition: 'background 0.15s, border-color 0.15s',
-                  }}
-                >
-                  {t.label}
-                </button>
-              ))}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {BOARD_TYPES.map((t) => {
+                const active = boardType === t.value;
+                return (
+                  <button
+                    key={t.value}
+                    onClick={() => setBoardType(t.value)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: 10,
+                      padding: '10px 12px',
+                      borderRadius: 12,
+                      border: '1.5px solid',
+                      borderColor: active ? 'var(--vkui--color_text_accent)' : 'var(--vkui--color_separator_primary)',
+                      background: active ? 'var(--vkui--color_background_accent_tint)' : 'var(--vkui--color_background_content)',
+                      cursor: 'pointer',
+                      fontFamily: 'inherit',
+                      textAlign: 'left',
+                      transition: 'border-color 0.15s, background 0.15s',
+                    }}
+                  >
+                    <span style={{ fontSize: 20, lineHeight: 1, flexShrink: 0 }}>{t.label.split(' ')[0]}</span>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: active ? 600 : 400, color: active ? 'var(--vkui--color_text_accent)' : 'var(--vkui--color_text_primary)' }}>
+                        {t.label.slice(t.label.indexOf(' ') + 1)}
+                      </div>
+                      <div style={{ fontSize: 12, color: 'var(--vkui--color_text_secondary)', marginTop: 2 }}>{t.desc}</div>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </FormItem>
           <FormItem>
