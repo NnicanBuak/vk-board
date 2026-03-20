@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import type { Prisma } from '@prisma/client';
 import prisma from '../db';
 import { requireAuth } from '../middleware/auth';
 
@@ -12,20 +13,22 @@ async function getRole(boardId: string, userId: number) {
   return entry?.role ?? null;
 }
 
-function formatCard(c: any) {
-  return {
-    ...c,
-    likeCount: c.likes.length,
-    likedBy: c.likes.map((l: any) => l.userId),
-    tags: c.tags?.map((ct: any) => ct.tag) ?? [],
-    likes: undefined,
-  };
-}
-
 const cardInclude = {
   likes: { select: { userId: true } },
   tags: { include: { tag: true } },
-};
+} satisfies Prisma.CardInclude;
+
+type CardWithRelations = Prisma.CardGetPayload<{ include: typeof cardInclude }>;
+
+function formatCard(c: CardWithRelations) {
+  return {
+    ...c,
+    likeCount: c.likes.length,
+    likedBy: c.likes.map((l) => l.userId),
+    tags: c.tags?.map((ct) => ct.tag) ?? [],
+    likes: undefined,
+  };
+}
 
 // GET /api/cards?boardId=&sort=likes|date&columnId=
 router.get('/', async (req: Request, res: Response): Promise<void> => {

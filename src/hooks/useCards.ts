@@ -3,6 +3,16 @@ import { cardsApi, type SortMode } from '../api/cards';
 import { likesApi } from '../api/likes';
 import type { Card } from '../types/card';
 
+/** Ensures fields added in later migrations always have safe defaults. */
+function normalizeCard(raw: Card): Card {
+  return {
+    ...raw,
+    assignees: raw.assignees ?? [],
+    likedBy:   raw.likedBy   ?? [],
+    tags:      raw.tags      ?? [],
+  };
+}
+
 interface State {
   cards: Card[];
   loading: boolean;
@@ -13,20 +23,24 @@ export function useCards(boardId: string, sort: SortMode) {
   const [state, setState] = useState<State>({ cards: [], loading: true, error: null });
 
   const load = useCallback(async () => {
+    if (!boardId) return;
     setState((s) => ({ ...s, loading: true, error: null }));
     try {
-      const cards = await cardsApi.list(boardId, sort);
+      const cards = (await cardsApi.list(boardId, sort)).map(normalizeCard);
       setState({ cards, loading: false, error: null });
     } catch (e) {
       setState({ cards: [], loading: false, error: (e as Error).message });
     }
   }, [boardId, sort]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const timeout = window.setTimeout(() => { void load(); }, 0);
+    return () => window.clearTimeout(timeout);
+  }, [load]);
 
   const addCard = useCallback(
     async (data: { title: string; description?: string; url?: string; columnId?: string | null }) => {
-      const card = await cardsApi.create({ boardId, ...data });
+      const card = normalizeCard(await cardsApi.create({ boardId, ...data }));
       setState((s) => ({ ...s, cards: [...s.cards, card] }));
       return card;
     },
@@ -35,7 +49,7 @@ export function useCards(boardId: string, sort: SortMode) {
 
   const updateCard = useCallback(
     async (id: string, data: Parameters<typeof cardsApi.update>[1]) => {
-      const updated = await cardsApi.update(id, data);
+      const updated = normalizeCard(await cardsApi.update(id, data));
       setState((s) => ({
         ...s,
         cards: s.cards.map((c) => (c.id === id ? updated : c)),

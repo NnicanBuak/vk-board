@@ -22,6 +22,7 @@ enum BoardType {
   kanban
   brainstorm
   retro
+  notes
 }
 
 model Board {
@@ -29,7 +30,7 @@ model Board {
   title       String
   description String?
   coverImage  String?     @map("cover_image")
-  boardType   BoardType   @default(voting) @map("board_type")
+  boardType   BoardType   @default(kanban) @map("board_type")
   chatId      String?     @map("chat_id")
   creatorId   Int         @map("creator_id")
   createdAt   DateTime    @default(now()) @map("created_at")

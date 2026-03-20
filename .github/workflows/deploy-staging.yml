@@ -1,0 +1,37 @@
+name: Deploy — Staging
+
+on:
+  push:
+    branches: [dev]
+
+jobs:
+  build:
+    name: Build (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    env:
+      CI: false
+    strategy:
+      matrix:
+        include:
+          - target: Frontend
+            working-directory: .
+            cache-dependency-path: package-lock.json
+          - target: Backend
+            working-directory: server
+            cache-dependency-path: server/package-lock.json
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: ${{ matrix.cache-dependency-path }}
+
+      - name: Install deps (${{ matrix.target }})
+        run: npm ci
+        working-directory: ${{ matrix.working-directory }}
+
+      - name: Build (${{ matrix.target }})
+        run: npm run build
+        working-directory: ${{ matrix.working-directory }}

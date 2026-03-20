@@ -17,6 +17,8 @@ export interface Card {
   url: string | null;
   imageUrl: string | null;
   status: CardStatus;
+  assignees: number[];
+  dueDate: string | null;
   order: number;
   createdAt: string;
   likeCount: number;

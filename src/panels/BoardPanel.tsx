@@ -1,17 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
-import {
-  DndContext,
-  DragOverlay,
-  MouseSensor,
-  TouchSensor,
-  useSensor,
-  useSensors,
-  useDroppable,
-  closestCorners,
-  type DragStartEvent,
-  type DragEndEvent,
-} from '@dnd-kit/core';
-import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { useState, useEffect, useRef, useCallback, useMemo, type JSX } from 'react';
 import {
   Panel,
   PanelHeader,
@@ -24,87 +11,75 @@ import {
   Box,
   ModalRoot,
   ModalPage,
+  ModalPageContent,
   ModalPageHeader,
-  FixedLayout,
-  Button,
   FormItem,
   Input,
   Textarea,
+  Button,
+  Alert,
+  List,
+  CellButton,
 } from '@vkontakte/vkui';
 import {
   Icon24LinkedOutline,
-  Icon28AddOutline,
-  Icon16PenOutline,
-  Icon16Add,
+  Icon24MoreHorizontal,
+  Icon16SortArrowUp,
+  Icon16SortArrowDown,
+  Icon16Like,
+  Icon16ClockOutline,
+  Icon16Done,
 } from '@vkontakte/icons';
-import { useRouteNavigator, useParams } from '@vkontakte/vk-mini-apps-router';
+import { useRouteNavigator, useParams, useActiveVkuiLocation } from '@vkontakte/vk-mini-apps-router';
+import { useFab } from '../store/fabState';
+import { isDraggingRef } from '../store/dragRef';
+import { PANELS } from '../router/routes';
+import bridge from '@vkontakte/vk-bridge';
 
 import { useBoardDetail } from '../hooks/useBoardDetail';
 import { useCards } from '../hooks/useCards';
 import { useColumns } from '../hooks/useColumns';
-import { useUser } from '../store/UserContext';
-import { CardForm } from '../components/card/CardForm';
+import { useUser } from '../store/userState';
 import { ErrorPlaceholder } from '../components/common/ErrorPlaceholder';
-import { KanbanColumn } from '../components/board/KanbanColumn';
-import { KanbanCard } from '../components/board/KanbanCard';
+import { KanbanBoard } from '../components/board/KanbanBoard';
+import { BrainstormBoard } from '../components/board/BrainstormBoard';
+import { NotesBoard } from '../components/notes/NotesBoard';
 import { CardDetailModal } from '../components/board/CardDetailModal';
 import { buildShareLink } from '../utils/buildShareLink';
 import { trackBoardVisit } from '../utils/recentBoards';
 import { tagsApi } from '../api/tags';
+import { boardsApi } from '../api/boards';
 import { usePresence } from '../hooks/usePresence';
 import type { Card, Tag } from '../types/card';
 
 const AVATAR_COLORS = ['#e53935', '#8e24aa', '#1e88e5', '#00897b', '#f4511e', '#33b679', '#fb8c00', '#6d4c41'];
 function memberColor(userId: number) { return AVATAR_COLORS[userId % AVATAR_COLORS.length]; }
 
-interface BacklogProps {
-  cards: Card[];
-  currentUserId: number;
-  onCardClick: (card: Card) => void;
-  onCardLike: (cardId: string) => void;
-  onAddCard: () => void;
-}
+const MODAL_RENAME = 'board_rename';
+const MODAL_DESC = 'board_desc';
+const MODAL_COVER = 'board_cover';
+const MODAL_SORT = 'brainstorm_sort';
+const MODAL_ACTIONS = 'board_actions';
 
-function BacklogColumn({ cards, currentUserId, onCardClick, onCardLike, onAddCard }: BacklogProps) {
-  const { setNodeRef, isOver } = useDroppable({ id: 'backlog' });
-  return (
-    <div className="kcolumn">
-      <div className="kcolumn__header">
-        <span className="kcolumn__title">Входящие</span>
-        <span className="kcolumn__count">{cards.length}</span>
-      </div>
-      <div ref={setNodeRef} className={`kcolumn__cards${isOver ? ' kcolumn__cards--over' : ''}`}>
-        <SortableContext items={cards.map((c) => c.id)} strategy={verticalListSortingStrategy}>
-          {cards.map((card) => (
-            <KanbanCard
-              key={card.id}
-              card={card}
-              currentUserId={currentUserId}
-              onClick={() => onCardClick(card)}
-              onLike={() => onCardLike(card.id)}
-            />
-          ))}
-        </SortableContext>
-      </div>
-      <button className="kcolumn__add-btn" onClick={onAddCard}>
-        <Icon16Add /><span>Добавить</span>
-      </button>
-    </div>
-  );
-}
+const BOARD_TYPE_LABELS: Record<string, string> = {
+  kanban: 'Канбан',
+  brainstorm: 'Брейншторм',
+  notes: 'Заметки',
+};
 
-const MODAL_CARD = 'card_form';
-const MODAL_EDIT_BOARD = 'edit_board';
-const MODAL_ADD_COLUMN = 'add_column';
+const VK_APP_ID = Number(import.meta.env.VITE_VK_APP_ID ?? 0);
 
-interface Props {
-  id: string;
-}
+interface Props { id: string }
 
 export function BoardPanel({ id }: Props) {
   const navigator = useRouteNavigator();
+  const { panel } = useActiveVkuiLocation();
+  const { showFab, hideFab } = useFab();
   const params = useParams<'boardId'>();
-  const boardId = params?.boardId ?? '';
+  const rawBoardId = params?.boardId ?? '';
+  const boardIdRef = useRef(rawBoardId);
+  if (rawBoardId) boardIdRef.current = rawBoardId;
+  const boardId = boardIdRef.current;
 
   useEffect(() => { if (boardId) trackBoardVisit(boardId); }, [boardId]);
 
@@ -112,139 +87,81 @@ export function BoardPanel({ id }: Props) {
   const userId = user?.userId ?? 0;
 
   const [activeModal, setActiveModal] = useState<string | null>(null);
-  const [editingCard, setEditingCard] = useState<Card | null>(null);
-  const [addCardColumnId, setAddCardColumnId] = useState<string | null>(null);
+  const fabActionRef = useRef<(() => void) | null>(null);
   const [selectedCard, setSelectedCard] = useState<Card | null>(null);
   const [snackbar, setSnackbar] = useState<string | null>(null);
+  const [brainstormSort, setBrainstormSort] = useState<'likes' | 'date'>('likes');
+  const [brainstormDirection, setBrainstormDirection] = useState<'desc' | 'asc'>('desc');
+  const sortHoldTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sortLongPressTriggered = useRef(false);
+
+  // Mini-modal state
   const [editTitle, setEditTitle] = useState('');
   const [editDesc, setEditDesc] = useState('');
-  const [editCover, setEditCover] = useState('');
-  const [savingBoard, setSavingBoard] = useState(false);
-  const [newColumnTitle, setNewColumnTitle] = useState('');
-  const [boardTags, setBoardTags] = useState<Tag[]>([]);
-  const [activeCard, setActiveCard] = useState<Card | null>(null);
+  const [coverPreview, setCoverPreview] = useState('');
+  const [coverUrl, setCoverUrl] = useState('');
+  const [uploadingCover, setUploadingCover] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  const sensors = useSensors(
-    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } }),
-  );
+  const [showDeleteAlert, setShowDeleteAlert] = useState(false);
+  const [boardTags, setBoardTags] = useState<Tag[]>([]);
+  const [boardMembers, setBoardMembers] = useState<{ userId: number; role: string }[]>([]);
   const [viewersOpen, setViewersOpen] = useState(false);
   const viewersBtnRef = useRef<HTMLDivElement>(null);
+  const coverFileRef = useRef<HTMLInputElement>(null);
 
   const { board, loading: boardLoading, error: boardError, refresh: refreshBoard, updateBoard } = useBoardDetail(boardId);
   const { cards, loading: cardsLoading, error: cardsError, refresh: refreshCards, addCard, updateCard, removeCard, toggleLike } = useCards(boardId, 'date');
   const { columns, loading: columnsLoading, refresh: refreshColumns, addColumn, renameColumn } = useColumns(boardId);
 
-  const isAdmin = board?.myRole === 'admin';
+  const isAdmin = board?.myRole === 'admin' || board?.myRole === 'owner';
+  const canEdit = isAdmin || board?.myRole === 'editor';
   const loading = boardLoading || cardsLoading || columnsLoading;
   const error = boardError ?? cardsError;
 
-  // Presence tracking
-  const selfInfo = user ? { firstName: user.firstName, lastName: user.lastName, photo100: user.photo100 ?? '' } : null;
+  const selfInfo = useMemo(
+    () => (user ? { firstName: user.firstName, lastName: user.lastName, photo100: user.photo100 ?? '' } : null),
+    [user],
+  );
   const viewers = usePresence(boardId, selfInfo);
 
-  // Load board tags
+  // Load tags + members
   useEffect(() => {
     if (!boardId) return;
-    tagsApi.list(boardId).then(setBoardTags).catch(() => {});
+    tagsApi.list(boardId).then(setBoardTags).catch(() => { });
+    boardsApi.members(boardId).then(setBoardMembers).catch(() => { });
   }, [boardId]);
 
   // Close viewers popup on outside click
   useEffect(() => {
     if (!viewersOpen) return;
     const handler = (e: MouseEvent) => {
-      if (viewersBtnRef.current && !viewersBtnRef.current.contains(e.target as Node)) {
-        setViewersOpen(false);
-      }
+      if (viewersBtnRef.current && !viewersBtnRef.current.contains(e.target as Node)) setViewersOpen(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [viewersOpen]);
 
-  // Keep selectedCard in sync with card list updates
+  // Sync selectedCard with latest card data
   useEffect(() => {
     if (!selectedCard) return;
     const updated = cards.find((c) => c.id === selectedCard.id);
     if (updated) setSelectedCard(updated);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cards]);
 
   const handleCopyLink = async () => {
     const link = buildShareLink(boardId);
     try {
       await window.navigator.clipboard.writeText(link);
-    } catch {
-      try {
-        const ta = document.createElement('textarea');
-        ta.value = link;
-        ta.style.cssText = 'position:fixed;opacity:0';
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand('copy');
-        document.body.removeChild(ta);
-      } catch { /* silent */ }
-    }
-    setSnackbar('Ссылка на доску скопирована');
+    } catch { /* silent — clipboard API unavailable */ }
+    setSnackbar('Ссылка скопирована');
   };
 
-  const openEditBoard = () => {
-    setEditTitle(board?.title ?? '');
-    setEditDesc(board?.description ?? '');
-    setEditCover(board?.coverImage ?? '');
-    setActiveModal(MODAL_EDIT_BOARD);
-  };
-
-  const handleSaveBoard = async () => {
-    if (!editTitle.trim()) return;
-    setSavingBoard(true);
+  const handleDeleteBoard = async () => {
     try {
-      await updateBoard({
-        title: editTitle.trim(),
-        description: editDesc.trim() || undefined,
-        coverImage: editCover.trim() || undefined,
-      });
-      setActiveModal(null);
-    } catch (e) {
-      setSnackbar((e as Error).message);
-    } finally {
-      setSavingBoard(false);
-    }
-  };
-
-  const openAddCard = (columnId: string | null = null) => {
-    setEditingCard(null);
-    setAddCardColumnId(columnId);
-    setActiveModal(MODAL_CARD);
-  };
-
-  const handleCardSave = async (data: { title: string; description?: string; url?: string }) => {
-    try {
-      if (editingCard) {
-        await updateCard(editingCard.id, data);
-      } else {
-        await addCard({ ...data, columnId: addCardColumnId });
-      }
-      setActiveModal(null);
-      setEditingCard(null);
-    } catch (e) {
-      setSnackbar((e as Error).message);
-    }
-  };
-
-  const handleAddColumn = async () => {
-    const title = newColumnTitle.trim();
-    if (!title) return;
-    try {
-      await addColumn(title);
-      setNewColumnTitle('');
-      setActiveModal(null);
-    } catch (e) {
-      setSnackbar((e as Error).message);
-    }
-  };
-
-  const handleMoveCard = async (cardId: string, columnId: string | null) => {
-    try {
-      await updateCard(cardId, { columnId });
+      await boardsApi.delete(boardId);
+      navigator.back();
     } catch (e) {
       setSnackbar((e as Error).message);
     }
@@ -277,7 +194,7 @@ export function BoardPanel({ id }: Props) {
     if (existing) {
       await tagsApi.assign(selectedCard.id, existing.id);
     } else {
-      const colors = ['#e53935','#8e24aa','#1e88e5','#00897b','#f4511e','#33b679','#fb8c00'];
+      const colors = ['#e53935', '#8e24aa', '#1e88e5', '#00897b', '#f4511e', '#33b679', '#fb8c00'];
       const color = colors[name.length % colors.length];
       const tag = await tagsApi.create({ boardId, name, color });
       setBoardTags((prev) => [...prev, tag]);
@@ -286,120 +203,378 @@ export function BoardPanel({ id }: Props) {
     refreshCards();
   };
 
-  // Cards without a column (backlog)
-  const uncolumnedCards = cards.filter((c) => !c.columnId);
-  const cardsForColumn = (colId: string) => cards.filter((c) => c.columnId === colId);
-
-  const handleDragStart = ({ active }: DragStartEvent) => {
-    setActiveCard(cards.find((c) => c.id === active.id) ?? null);
-  };
-
-  const handleDragEnd = ({ active, over }: DragEndEvent) => {
-    setActiveCard(null);
-    if (!over || active.id === over.id) return;
-    const dragged = cards.find((c) => c.id === active.id);
-    if (!dragged) return;
-    const overCard = cards.find((c) => c.id === over.id);
-    const overColumn = columns.find((c) => c.id === over.id);
-    let newColumnId: string | null = dragged.columnId ?? null;
-    if (over.id === 'backlog') newColumnId = null;
-    else if (overColumn) newColumnId = overColumn.id;
-    else if (overCard) newColumnId = overCard.columnId ?? null;
-    if (newColumnId !== (dragged.columnId ?? null)) {
-      handleMoveCard(String(active.id), newColumnId);
+  // ── Cover upload helpers ──
+  const handleCoverFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingCover(true);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await fetch('/api/upload', { method: 'POST', body: form });
+      if (!res.ok) throw new Error('Ошибка загрузки');
+      const { url } = await res.json() as { url: string };
+      setCoverUrl(url);
+      setCoverPreview(url);
+    } catch (err) {
+      setSnackbar((err as Error).message);
+    } finally {
+      setUploadingCover(false);
+      if (coverFileRef.current) coverFileRef.current.value = '';
     }
   };
 
-  const modal = (
-    <ModalRoot activeModal={activeModal} onClose={() => { setActiveModal(null); setEditingCard(null); }}>
-      <ModalPage
-        id={MODAL_CARD}
-        hideCloseButton
-        header={
-          <ModalPageHeader>
-            {editingCard ? 'Редактировать идею' : 'Предложить идею'}
-          </ModalPageHeader>
-        }
-      >
-        <CardForm
-          initial={editingCard ?? undefined}
-          onSave={handleCardSave}
-          onCancel={() => { setActiveModal(null); setEditingCard(null); }}
-        />
-      </ModalPage>
+  const handleVKGallery = async () => {
+    try {
+      const auth = await bridge.send('VKWebAppGetAuthToken', { app_id: VK_APP_ID, scope: 'photos' });
+      const res = await bridge.send('VKWebAppCallAPIMethod', {
+        method: 'photos.getAll',
+        params: { count: 1, access_token: auth.access_token, v: '5.131' },
+      });
+      const items = (res.response as { items?: { sizes?: { url: string; width: number }[] }[] })?.items ?? [];
+      if (!items.length) { setSnackbar('Нет фото в галерее'); return; }
+      const sizes = items[0].sizes ?? [];
+      const largest = [...sizes].sort((a, b) => b.width - a.width)[0];
+      if (largest?.url) { setCoverUrl(largest.url); setCoverPreview(largest.url); }
+    } catch {
+      setSnackbar('Не удалось открыть галерею VK');
+    }
+  };
 
+  // ── ActionSheet handlers ──
+  const openRename = () => {
+    setEditTitle(board?.title ?? '');
+    setActiveModal(MODAL_RENAME);
+  };
+
+  const openDesc = () => {
+    setEditDesc(board?.description ?? '');
+    setActiveModal(MODAL_DESC);
+  };
+
+  const openCover = () => {
+    setCoverUrl(board?.coverImage ?? '');
+    setCoverPreview(board?.coverImage ?? '');
+    setActiveModal(MODAL_COVER);
+  };
+
+  const handleOpenAccessSettings = () => {
+    setActiveModal(null);
+    navigator.push(`/board/${boardId}/access`);
+  };
+
+  const handleAskDelete = () => {
+    setActiveModal(null);
+    setShowDeleteAlert(true);
+  };
+
+  const handleSaveTitle = async () => {
+    if (!editTitle.trim()) return;
+    setSaving(true);
+    try {
+      await updateBoard({ title: editTitle.trim() });
+      setActiveModal(null);
+    } catch (e) { setSnackbar((e as Error).message); }
+    finally { setSaving(false); }
+  };
+
+  const handleSaveDesc = async () => {
+    setSaving(true);
+    try {
+      await updateBoard({ description: editDesc.trim() || undefined });
+      setActiveModal(null);
+    } catch (e) { setSnackbar((e as Error).message); }
+    finally { setSaving(false); }
+  };
+
+  const handleSaveCover = async () => {
+    setSaving(true);
+    try {
+      await updateBoard({ coverImage: coverUrl || undefined });
+      setActiveModal(null);
+    } catch (e) { setSnackbar((e as Error).message); }
+    finally { setSaving(false); }
+  };
+
+
+  const boardType = board?.boardType ?? 'kanban';
+
+  useEffect(() => {
+    if (boardType !== 'brainstorm' && activeModal === MODAL_SORT) {
+      setActiveModal(null);
+    }
+  }, [boardType, activeModal]);
+
+  useEffect(() => {
+    if (!isAdmin && activeModal === MODAL_ACTIONS) {
+      setActiveModal(null);
+    }
+  }, [isAdmin, activeModal]);
+
+  useEffect(() => {
+    return () => {
+      if (sortHoldTimer.current) {
+        clearTimeout(sortHoldTimer.current);
+        sortHoldTimer.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    setBrainstormSort('likes');
+    setBrainstormDirection('desc');
+  }, [boardId]);
+
+  const cancelBrainstormSortTimer = () => {
+    if (sortHoldTimer.current !== null) {
+      clearTimeout(sortHoldTimer.current);
+      sortHoldTimer.current = null;
+      return true;
+    }
+    return false;
+  };
+
+  const handleBrainstormSortPointerDown = () => {
+    sortLongPressTriggered.current = false;
+    sortHoldTimer.current = setTimeout(() => {
+      sortHoldTimer.current = null;
+      sortLongPressTriggered.current = true;
+      setActiveModal(MODAL_SORT);
+    }, 400);
+  };
+
+  const handleBrainstormSortPointerUp = () => {
+    if (cancelBrainstormSortTimer() && !sortLongPressTriggered.current) {
+      setBrainstormDirection((d) => (d === 'desc' ? 'asc' : 'desc'));
+    }
+  };
+
+  const handleBrainstormSortPointerLeave = () => {
+    cancelBrainstormSortTimer();
+  };
+
+  const handleSelectBrainstormSort = (mode: 'likes' | 'date') => {
+    setBrainstormSort(mode);
+    setActiveModal(null);
+  };
+
+  useEffect(() => {
+    const active = panel === PANELS.BOARD && canEdit && boardType !== 'notes';
+    if (!active) {
+      hideFab();
+      return;
+    }
+    showFab(() => fabActionRef.current?.());
+  }, [panel, canEdit, boardType, showFab, hideFab]);
+
+  const registerFabAction = useCallback((handler: (() => void) | null) => {
+    fabActionRef.current = handler;
+  }, []);
+
+  const closeModal = () => setActiveModal(null);
+
+  const modals: JSX.Element[] = [];
+
+  if (isAdmin) {
+    modals.push(
       <ModalPage
-        id={MODAL_EDIT_BOARD}
+        key={MODAL_ACTIONS}
+        id={MODAL_ACTIONS}
+        settlingHeight={50}
         hideCloseButton
         header={
-          <ModalPageHeader after={<PanelHeaderClose onClick={() => setActiveModal(null)} />}>
-            Редактировать доску
+          <ModalPageHeader after={<PanelHeaderClose onClick={closeModal} />}>
+            Действия с доской
           </ModalPageHeader>
         }
       >
+        <ModalPageContent>
+          <List>
+            <CellButton onClick={openRename}>
+              Переименовать
+            </CellButton>
+            <CellButton onClick={openDesc}>
+              Изменить описание
+            </CellButton>
+            <CellButton onClick={openCover}>
+              Изменить обложку
+            </CellButton>
+            <CellButton onClick={handleOpenAccessSettings}>
+              Настройки доступа
+            </CellButton>
+            <CellButton appearance="negative" onClick={handleAskDelete}>
+              Удалить доску
+            </CellButton>
+          </List>
+        </ModalPageContent>
+      </ModalPage>,
+    );
+  }
+
+  if (boardType === 'brainstorm') {
+    modals.push(
+      <ModalPage
+        key={MODAL_SORT}
+        id={MODAL_SORT}
+        dynamicContentHeight
+        hideCloseButton
+        header={
+          <ModalPageHeader after={<PanelHeaderClose onClick={closeModal} />}>
+            Сортировка
+          </ModalPageHeader>
+        }
+      >
+        <ModalPageContent>
+          <List>
+            <CellButton
+              before={<Icon16Like />}
+              after={brainstormSort === 'likes' ? <Icon16Done /> : undefined}
+              onClick={() => handleSelectBrainstormSort('likes')}
+            >
+              По лайкам
+            </CellButton>
+            <CellButton
+              before={<Icon16ClockOutline />}
+              after={brainstormSort === 'date' ? <Icon16Done /> : undefined}
+              onClick={() => handleSelectBrainstormSort('date')}
+            >
+              По дате
+            </CellButton>
+          </List>
+        </ModalPageContent>
+      </ModalPage>,
+    );
+  }
+
+  modals.push(
+    <ModalPage
+      key={MODAL_RENAME}
+      id={MODAL_RENAME}
+      dynamicContentHeight
+      hideCloseButton
+      header={
+        <ModalPageHeader after={<PanelHeaderClose onClick={closeModal} />}>
+          Название доски
+        </ModalPageHeader>
+      }
+    >
+      <ModalPageContent>
         <Box>
           <FormItem top="Название *">
-            <Input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} maxLength={100} />
+            <Input
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              maxLength={100}
+              autoFocus
+              onKeyDown={(e) => e.key === 'Enter' && handleSaveTitle()}
+            />
           </FormItem>
+          <FormItem>
+            <Button size="l" stretched onClick={handleSaveTitle} disabled={!editTitle.trim() || saving} loading={saving}>
+              Сохранить
+            </Button>
+          </FormItem>
+        </Box>
+      </ModalPageContent>
+    </ModalPage>,
+    <ModalPage
+      key={MODAL_DESC}
+      id={MODAL_DESC}
+      dynamicContentHeight
+      hideCloseButton
+      header={
+        <ModalPageHeader after={<PanelHeaderClose onClick={closeModal} />}>
+          Описание доски
+        </ModalPageHeader>
+      }
+    >
+      <ModalPageContent>
+        <Box>
           <FormItem top="Описание">
             <Textarea
               value={editDesc}
               onChange={(e) => setEditDesc(e.target.value)}
               placeholder="Необязательно"
               maxLength={300}
-              rows={3}
-            />
-          </FormItem>
-          <FormItem top="Обложка (URL картинки)">
-            <Input
-              value={editCover}
-              onChange={(e) => setEditCover(e.target.value)}
-              placeholder="https://example.com/image.jpg"
-            />
-            {editCover.trim() && (
-              <img
-                src={`/api/images?url=${encodeURIComponent(editCover.trim())}`}
-                alt="preview"
-                style={{ marginTop: 8, width: '100%', maxHeight: 120, objectFit: 'cover', borderRadius: 8 }}
-                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-              />
-            )}
-          </FormItem>
-          <FormItem>
-            <Button size="l" stretched onClick={handleSaveBoard} disabled={!editTitle.trim() || savingBoard} loading={savingBoard}>
-              Сохранить
-            </Button>
-          </FormItem>
-        </Box>
-      </ModalPage>
-
-      <ModalPage
-        id={MODAL_ADD_COLUMN}
-        hideCloseButton
-        header={
-          <ModalPageHeader after={<PanelHeaderClose onClick={() => setActiveModal(null)} />}>
-            Новая колонка
-          </ModalPageHeader>
-        }
-      >
-        <Box>
-          <FormItem top="Название колонки">
-            <Input
-              value={newColumnTitle}
-              onChange={(e) => setNewColumnTitle(e.target.value)}
-              placeholder="Например: В работе"
-              onKeyDown={(e) => e.key === 'Enter' && handleAddColumn()}
+              rows={4}
               autoFocus
             />
           </FormItem>
           <FormItem>
-            <Button size="l" stretched onClick={handleAddColumn} disabled={!newColumnTitle.trim()}>
-              Создать
+            <Button size="l" stretched onClick={handleSaveDesc} disabled={saving} loading={saving}>
+              Сохранить
             </Button>
           </FormItem>
         </Box>
-      </ModalPage>
-    </ModalRoot>
+      </ModalPageContent>
+    </ModalPage>,
+    <ModalPage
+      key={MODAL_COVER}
+      id={MODAL_COVER}
+      dynamicContentHeight
+      hideCloseButton
+      header={
+        <ModalPageHeader after={<PanelHeaderClose onClick={closeModal} />}>
+          Обложка доски
+        </ModalPageHeader>
+      }
+    >
+      <ModalPageContent>
+        <Box>
+          <FormItem>
+            <input
+              ref={coverFileRef}
+              type="file"
+              accept="image/*"
+              style={{ display: 'none' }}
+              onChange={handleCoverFile}
+            />
+            {coverPreview && (
+              <img
+                src={coverPreview}
+                alt="preview"
+                style={{ width: '100%', maxHeight: 160, objectFit: 'cover', borderRadius: 8, marginBottom: 8 }}
+              />
+            )}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+              <Button
+                size="m"
+                mode="secondary"
+                stretched
+                loading={uploadingCover}
+                disabled={uploadingCover}
+                onClick={() => coverFileRef.current?.click()}
+              >
+                С устройства
+              </Button>
+              <Button
+                size="m"
+                mode="secondary"
+                stretched
+                onClick={handleVKGallery}
+              >
+                Из VK Фото
+              </Button>
+            </div>
+            {coverPreview && (
+              <Button
+                size="m"
+                appearance="negative"
+                mode="outline"
+                stretched
+                style={{ marginBottom: 8 }}
+                onClick={() => { setCoverUrl(''); setCoverPreview(''); }}
+              >
+                Убрать обложку
+              </Button>
+            )}
+            <Button size="l" stretched onClick={handleSaveCover} disabled={saving} loading={saving}>
+              Сохранить
+            </Button>
+          </FormItem>
+        </Box>
+      </ModalPageContent>
+    </ModalPage>,
   );
 
   return (
@@ -417,32 +592,19 @@ export function BoardPanel({ id }: Props) {
                   aria-label="Кто смотрит"
                 >
                   {viewers.slice(0, 3).map((v) => (
-                    <div
-                      key={v.userId}
-                      className="member-avatar"
-                      style={v.photo100 ? undefined : { background: memberColor(v.userId) }}
-                    >
+                    <div key={v.userId} className="member-avatar" style={v.photo100 ? undefined : { background: memberColor(v.userId) }}>
                       {v.photo100 ? <img src={v.photo100} alt="" /> : v.firstName.charAt(0)}
                     </div>
                   ))}
-                  {viewers.length > 3 && (
-                    <div className="member-avatar member-avatar--more">+{viewers.length - 3}</div>
-                  )}
+                  {viewers.length > 3 && <div className="member-avatar member-avatar--more">+{viewers.length - 3}</div>}
                 </button>
 
                 {viewersOpen && (
                   <div className="viewers-popup">
                     <div className="viewers-popup__title">Сейчас смотрят</div>
                     {viewers.map((v) => (
-                      <button
-                        key={v.userId}
-                        className="viewers-popup__item"
-                        onClick={() => window.open(`https://vk.com/id${v.userId}`, '_blank')}
-                      >
-                        <div
-                          className="member-avatar"
-                          style={{ flexShrink: 0, ...(v.photo100 ? {} : { background: memberColor(v.userId) }) }}
-                        >
+                      <button key={v.userId} className="viewers-popup__item" onClick={() => window.open(`https://vk.com/id${v.userId}`, '_blank')}>
+                        <div className="member-avatar" style={{ flexShrink: 0, ...(v.photo100 ? {} : { background: memberColor(v.userId) }) }}>
                           {v.photo100 ? <img src={v.photo100} alt="" /> : v.firstName.charAt(0)}
                         </div>
                         <span>{v.firstName} {v.lastName}</span>
@@ -455,131 +617,127 @@ export function BoardPanel({ id }: Props) {
             <PanelHeaderButton onClick={handleCopyLink} aria-label="Скопировать ссылку">
               <Icon24LinkedOutline />
             </PanelHeaderButton>
+            {isAdmin && (
+              <PanelHeaderButton
+                onClick={() => setActiveModal(MODAL_ACTIONS)}
+                aria-label="Действия с доской"
+              >
+                <Icon24MoreHorizontal />
+              </PanelHeaderButton>
+            )}
           </div>
         }
       >
-        Доска
+        {BOARD_TYPE_LABELS[board?.boardType ?? ''] ?? 'Доска'}
       </PanelHeader>
 
       <PullToRefresh
-        onRefresh={() => { refreshBoard(); refreshCards(); refreshColumns(); }}
+        onRefresh={() => { if (!isDraggingRef.current) { refreshBoard(); refreshCards(); refreshColumns(); } }}
         isFetching={loading}
       >
         {error ? (
           <ErrorPlaceholder message={error} onRetry={() => { refreshBoard(); refreshCards(); }} />
         ) : (
           <div className="page-inner">
-            {/* Second-level title */}
-            {isAdmin ? (
-              <button className="board-page-title board-page-title--editable" onClick={openEditBoard}>
-                {board?.title ?? 'Голосование'}
-                <Icon16PenOutline className="board-page-title__icon" />
-              </button>
-            ) : (
-              <h2 className="board-page-title">{board?.title ?? 'Голосование'}</h2>
-            )}
+            {/* Board title + description */}
+            <div className="board-page-title-row">
+              <h2 className="board-page-title">{board?.title ?? ''}</h2>
+              {boardType === 'brainstorm' && (
+                <div className="brainstorm__header brainstorm__header--inline">
+                  <button
+                    className="brainstorm__sort-btn"
+                    onPointerDown={handleBrainstormSortPointerDown}
+                    onPointerUp={handleBrainstormSortPointerUp}
+                    onPointerLeave={handleBrainstormSortPointerLeave}
+                    onContextMenu={(e) => e.preventDefault()}
+                    aria-label="Сортировка карточек"
+                  >
+                    {brainstormDirection === 'desc' ? <Icon16SortArrowDown /> : <Icon16SortArrowUp />}
+                    {brainstormSort === 'likes' ? 'По лайкам' : 'По дате'}
+                  </button>
+                </div>
+              )}
+            </div>
+            {board?.description && <p className="board-page-desc">{board.description}</p>}
 
-            {board?.description && (
-              <p className="board-page-desc">{board.description}</p>
-            )}
-
-            {/* Kanban board */}
             {loading ? (
               <Box style={{ display: 'flex', justifyContent: 'center', paddingTop: 48 }}>
                 <Spinner size="l" />
               </Box>
+            ) : boardType === 'kanban' ? (
+              <KanbanBoard
+                cards={cards}
+                columns={columns}
+                isAdmin={isAdmin}
+                canEdit={canEdit}
+                userId={userId}
+                addCard={addCard}
+                updateCard={async (id, data) => { await updateCard(id, data); }}
+                addColumn={addColumn}
+                renameColumn={renameColumn}
+                toggleLike={toggleLike}
+                onCardClick={setSelectedCard}
+                onSnackbar={setSnackbar}
+                onDraggingChange={(v) => { isDraggingRef.current = v; }}
+                registerFabAction={registerFabAction}
+              />
+            ) : boardType === 'brainstorm' ? (
+              <BrainstormBoard
+                cards={cards}
+                canEdit={canEdit}
+                userId={userId}
+                addCard={addCard}
+                toggleLike={toggleLike}
+                onCardClick={setSelectedCard}
+                onSnackbar={setSnackbar}
+                registerFabAction={registerFabAction}
+                sortMode={brainstormSort}
+                sortDirection={brainstormDirection}
+              />
             ) : (
-              <DndContext
-                sensors={sensors}
-                collisionDetection={closestCorners}
-                onDragStart={handleDragStart}
-                onDragEnd={handleDragEnd}
-              >
-                <div className="kanban">
-                  {(uncolumnedCards.length > 0 || columns.length === 0) && (
-                    <BacklogColumn
-                      cards={uncolumnedCards}
-                      currentUserId={userId}
-                      onCardClick={setSelectedCard}
-                      onCardLike={(cardId) => toggleLike(cardId, userId)}
-                      onAddCard={() => openAddCard(null)}
-                    />
-                  )}
-
-                  {columns.map((col) => (
-                    <KanbanColumn
-                      key={col.id}
-                      column={col}
-                      cards={cardsForColumn(col.id)}
-                      currentUserId={userId}
-                      isAdmin={isAdmin}
-                      onCardClick={setSelectedCard}
-                      onCardLike={(cardId) => toggleLike(cardId, userId)}
-                      onAddCard={openAddCard}
-                      onRename={isAdmin ? renameColumn : undefined}
-                    />
-                  ))}
-
-                  {isAdmin && (
-                    <div className="kcolumn kcolumn--ghost">
-                      <button
-                        className="kcolumn__new-btn"
-                        onClick={() => { setNewColumnTitle(''); setActiveModal(MODAL_ADD_COLUMN); }}
-                      >
-                        <Icon16Add />
-                        <span>Новая колонка</span>
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                <DragOverlay dropAnimation={{ duration: 200, easing: 'ease' }}>
-                  {activeCard && (
-                    <KanbanCard
-                      card={activeCard}
-                      currentUserId={userId}
-                      isOverlay
-                    />
-                  )}
-                </DragOverlay>
-              </DndContext>
+              <NotesBoard
+                boardId={boardId}
+                canEdit={canEdit}
+                onSnackbar={setSnackbar}
+              />
             )}
-
-            <div style={{ height: 88 }} />
           </div>
         )}
       </PullToRefresh>
 
-      {/* FAB — add card without column */}
-      {!error && (
-        <FixedLayout vertical="bottom">
-          <div className="page-inner">
-            <Box style={{ display: 'flex', justifyContent: 'flex-end', paddingRight: 16, paddingBottom: 'max(20px, env(safe-area-inset-bottom))' }}>
-              <button className="fab" onClick={() => openAddCard(null)} aria-label="Предложить идею">
-                <Icon28AddOutline />
-              </button>
-            </Box>
-          </div>
-        </FixedLayout>
+      {/* Mini modals */}
+      <ModalRoot activeModal={activeModal} onClose={closeModal}>
+        {modals}
+      </ModalRoot>
+
+      {showDeleteAlert && (
+        <Alert
+          actions={[
+            { title: 'Удалить', mode: 'destructive', action: handleDeleteBoard },
+            { title: 'Отмена', mode: 'cancel' },
+          ]}
+          actionsLayout="horizontal"
+          onClose={() => setShowDeleteAlert(false)}
+          title="Удалить доску?"
+          description={`«${board?.title}» и все её данные будут удалены без возможности восстановления.`}
+        />
       )}
 
-      {modal}
-
-      {/* Full-screen card detail */}
+      {/* Card detail (kanban + brainstorm) */}
       {selectedCard && (
         <CardDetailModal
           card={selectedCard}
           columns={columns}
           boardTags={boardTags}
+          boardMembers={boardMembers}
           currentUserId={userId}
           isAdmin={isAdmin}
+          canEdit={canEdit}
           onClose={() => setSelectedCard(null)}
           onLike={() => toggleLike(selectedCard.id, userId)}
-          onMoveColumn={(columnId) => handleMoveCard(selectedCard.id, columnId)}
+          onMoveColumn={(columnId) => updateCard(selectedCard.id, { columnId })}
           onDelete={() => handleDeleteCard(selectedCard.id)}
-          onUpdate={async (data) => {
-            await updateCard(selectedCard.id, data);
-          }}
+          onUpdate={async (data) => { await updateCard(selectedCard.id, data); }}
           onTagAssign={handleTagAssign}
           onTagUnassign={handleTagUnassign}
           onTagCreate={handleTagCreate}

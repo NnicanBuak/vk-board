@@ -23,6 +23,10 @@ body {
 
 /* ── FAB ── */
 .fab {
+  position: fixed;
+  bottom: max(20px, env(safe-area-inset-bottom));
+  right: 16px;
+  z-index: 12;
   width: 56px !important;
   height: 56px !important;
   min-width: 56px;
@@ -70,7 +74,7 @@ body {
 .hero-bg {
   position: relative;
   overflow: hidden;
-  background: #10082a;
+  background: #6b57af57;
 }
 
 .hero-orb {
@@ -202,7 +206,7 @@ body {
 }
 
 .board-card__title {
-  font-size: 15px;
+  font-size: 18px;
   font-weight: 600;
   color: var(--vkui--color_text_primary);
   margin-bottom: 6px;
@@ -212,7 +216,7 @@ body {
 }
 
 .board-card__desc {
-  font-size: 13px;
+  font-size: 15px;
   color: var(--vkui--color_text_secondary);
   line-height: 1.5;
   margin-bottom: 12px;
@@ -227,22 +231,22 @@ body {
 }
 
 .board-card__type {
-  font-size: 11px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--vkui--color_text_secondary);
   background: var(--vkui--color_background_secondary);
   border-radius: 4px;
-  padding: 2px 6px;
+  padding: 3px 8px;
   white-space: nowrap;
 }
 
 .board-card__date {
-  font-size: 12px;
+  font-size: 15px;
   color: var(--vkui--color_text_tertiary);
 }
 
 .board-card__badge {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--vkui--color_text_accent);
   background: var(--vkui--color_background_accent_tinted);
@@ -252,10 +256,16 @@ body {
 }
 
 /* ── Board page title (second-level heading below PanelHeader) ── */
-.board-page-title {
-  display: block;
-  width: 100%;
+.board-page-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   padding: 14px 16px 10px;
+  justify-content: space-between;
+}
+
+.board-page-title {
+  flex: 1;
   margin: 0;
   font-size: 24px;
   font-weight: 700;
@@ -1208,4 +1218,350 @@ body {
   --vkui_internal--spacing_size: 0px !important;
   padding: 0 !important;
   margin: 0 !important;
+}
+
+/* ── Remove redundant separator <hr> rendered on compact screen sizes ── */
+.vkuiSeparator__padded.vkuiSeparator__appearancePrimary.vkuiSeparator__directionHorizontal > hr {
+  display: none !important;
+}
+
+/* ── Darker PanelHeader background (exclude modal headers) ── */
+.vkuiPanelHeader__host:not(.vkuiModalPageHeader__host .vkuiPanelHeader__host) > .vkuiPanelHeader__in {
+  background: var(--vkui--color_background_secondary) !important;
+}
+
+/* ── Modal page constraints ── */
+/* VKUI uses CSS modules, so target class fragments instead of exact names */
+:root {
+  --vkui--size_popup_small--regular: min(768px, 100%) !important;
+}
+
+@media (max-width: 767px) {
+  .vkuiModalRoot__modal [class*="vkuiModalPage__document"] {
+    box-sizing: border-box !important;
+    inset-inline-start: 16px !important;
+    inset-inline-end: 16px !important;
+    left: 16px !important;
+    right: 16px !important;
+    width: calc(100% - 32px) !important;
+    max-width: calc(100% - 32px) !important;
+  }
+}
+
+/* ── ActionSheet separators ── */
+.vkuiActionSheet__contentWrapper
+  .vkuiActionSheetItem__host:not(.vkuiActionSheetItem__ios):not(.vkuiActionSheetItem__modeCancel)
+  + .vkuiActionSheetItem__host:not(.vkuiActionSheetItem__ios):not(.vkuiActionSheetItem__modeCancel)::before {
+  content: '';
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  top: 0;
+  height: 1px;
+  background: var(--vkui--color_background_secondary);
+  pointer-events: none;
+}
+
+/* ── HomePanel: hero content layout ── */
+.hero-bg {
+  height: calc(50vh + env(safe-area-inset-top));
+  padding-top: env(safe-area-inset-top);
+}
+
+.hero-bg__content {
+  position: relative;
+  z-index: 1;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding: 48px 24px 36px;
+  gap: 12px;
+}
+
+.hero__title {
+  font-size: 42px;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: -0.5px;
+  line-height: 1.15;
+  margin: 0;
+}
+
+.hero__subtitle {
+  font-size: 20px;
+  color: rgba(255, 255, 255, 0.88);
+  line-height: 1.5;
+  max-width: 280px;
+  margin: 0;
+}
+
+/* ── HomePanel: tabs row ── */
+.home-tabs {
+  padding-top: 4px;
+}
+
+/* ── HomePanel: board type picker ── */
+.board-type-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.board-type-btn {
+  display: flex;
+  align-items: stretch;
+  border-radius: 12px;
+  border: 2px solid var(--vkui--color_separator_primary);
+  background: var(--vkui--color_background_content);
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  transition: border-color 0.15s;
+  width: 100%;
+  overflow: hidden;
+}
+
+.board-type-btn--active {
+  border-color: var(--vkui--color_text_accent);
+  background-color: var(--vkui--color_text_accent);
+}
+
+.board-type-btn__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 10px 12px;
+  color: var(--vkui--color_text_secondary);
+  transition: background 0.15s, color 0.15s;
+}
+
+.board-type-btn--active .board-type-btn__icon {
+  background: var(--vkui--color_text_accent);
+  color: #ffffff;
+}
+
+.board-type-btn__text {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  justify-content: center;
+  padding: 12px;
+  gap: 2px;
+  border-radius: 12px;
+  background-color: var(--vkui--color_background_content);
+}
+
+.board-type-btn__name {
+  font-size: 14px;
+  font-weight: bold;
+  color: var(--vkui--color_text_primary);
+}
+
+.board-type-btn__desc {
+  font-size: 12px;
+  color: var(--vkui--color_text_secondary);
+}
+
+/* ── Misc HomePanel utils ── */
+.cover-preview {
+  width: 100%;
+  max-height: 120px;
+  object-fit: cover;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  display: block;
+}
+
+.cover-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+/* ── Brainstorm board ── */
+.brainstorm {
+  padding: 0 16px 16px;
+}
+
+.brainstorm__header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 10px 0 6px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--vkui--color_background_content);
+}
+
+.brainstorm__header--inline {
+  padding: 0;
+  position: static;
+  background: transparent;
+}
+
+.brainstorm__sort-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--vkui--color_background_secondary);
+  border: none;
+  border-radius: 8px;
+  color: var(--vkui--color_text_secondary);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 6px 10px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  transition: background 0.1s;
+}
+
+.brainstorm__sort-btn:active {
+  background: var(--vkui--color_background_tertiary);
+}
+
+.brainstorm__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 48px 0;
+  color: var(--vkui--color_text_secondary);
+  font-size: 15px;
+  text-align: center;
+}
+
+.brainstorm__grid {
+  columns: 2;
+  column-gap: 10px;
+}
+
+@media (max-width: 400px) {
+  .brainstorm__grid {
+    columns: 1;
+  }
+}
+
+@media (min-width: 600px) {
+  .brainstorm__grid {
+    columns: 3;
+  }
+}
+
+@media (min-width: 900px) {
+  .brainstorm__grid {
+    columns: 4;
+  }
+}
+
+/* ── Idea card ── */
+.idea-card {
+  background: var(--vkui--color_background_content);
+  border-radius: 12px;
+  border: 1px solid var(--vkui--color_separator_primary);
+  overflow: hidden;
+  cursor: pointer;
+  break-inside: avoid;
+  margin-bottom: 10px;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.idea-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1);
+}
+
+.idea-card:active {
+  transform: scale(0.98);
+  box-shadow: none;
+}
+
+.idea-card__preview {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background-size: cover;
+  background-position: center;
+  flex-shrink: 0;
+}
+
+.idea-card__body {
+  padding: 10px 12px 6px;
+  flex: 1;
+}
+
+.idea-card__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.idea-card__tag {
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 4px;
+  padding: 2px 6px;
+  white-space: nowrap;
+}
+
+.idea-card__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--vkui--color_text_primary);
+  line-height: 1.35;
+  margin-bottom: 4px;
+  word-break: break-word;
+}
+
+.idea-card__desc {
+  font-size: 12px;
+  color: var(--vkui--color_text_secondary);
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.idea-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px 8px;
+}
+
+.idea-card__winner {
+  font-size: 11px;
+  font-weight: 600;
+  color: #ff9800;
+  background: #ff980022;
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+
+.idea-card__like {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: none;
+  color: var(--vkui--color_text_tertiary);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  transition: background 0.1s;
+  margin-left: auto;
+}
+
+.idea-card__like:hover {
+  background: var(--vkui--color_background_secondary);
+}
+
+.idea-card__like--active {
+  color: #e53935;
 }

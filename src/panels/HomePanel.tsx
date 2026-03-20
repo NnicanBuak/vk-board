@@ -1,7 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from "react";
 import {
   Panel,
-  PanelHeader,
   Button,
   FormItem,
   Input,
@@ -12,30 +11,55 @@ import {
   Box,
   ModalRoot,
   ModalPage,
+  ModalPageContent,
   ModalPageHeader,
-  PanelHeaderClose,
-  FixedLayout,
   Tabs,
   TabsItem,
-} from '@vkontakte/vkui';
-import { Icon28AddOutline } from '@vkontakte/icons';
-import { useRouteNavigator } from '@vkontakte/vk-mini-apps-router';
+} from "@vkontakte/vkui";
+import {
+  useRouteNavigator,
+  useActiveVkuiLocation,
+} from "@vkontakte/vk-mini-apps-router";
+import {
+  Icon24Squareshape3VerticalOutline,
+  Icon24BrainOutline,
+  Icon24DocumentListOutline,
+} from "@vkontakte/icons";
+import { useFab } from "../store/fabState";
+import { PANELS } from "../router/routes";
 
-import { useBoards } from '../hooks/useBoards';
-import { BoardListItem } from '../components/board/BoardListItem';
-import { EmptyState } from '../components/common/EmptyState';
-import { ErrorPlaceholder } from '../components/common/ErrorPlaceholder';
-import { getRecentBoardIds } from '../utils/recentBoards';
-import type { Board, BoardType } from '../types/board';
+import { useBoards } from "../hooks/useBoards";
+import { BoardListItem } from "../components/board/BoardListItem";
+import { EmptyState } from "../components/common/EmptyState";
+import { ErrorPlaceholder } from "../components/common/ErrorPlaceholder";
+import { getRecentBoardIds } from "../utils/recentBoards";
+import type { Board, BoardType } from "../types/board";
 
-const BOARD_TYPES: { value: BoardType; label: string }[] = [
-  { value: 'voting',    label: '🗳 Голосование' },
-  { value: 'kanban',    label: '📋 Задачи' },
-  { value: 'brainstorm',label: '🧠 Штурм' },
-  { value: 'retro',     label: '🔄 Ретро' },
+const BOARD_TYPES: { value: BoardType; label: string; desc: string }[] = [
+  {
+    value: "kanban",
+    label: "Канбан",
+    desc: "Колонки и задачи с исполнителями и дедлайнами",
+  },
+  {
+    value: "brainstorm",
+    label: "Брейншторм",
+    desc: "Сетка идей с голосованием, без колонок",
+  },
+  {
+    value: "notes",
+    label: "Заметки",
+    desc: "Страницы с форматированным текстом, как в Notion",
+  },
 ];
 
-const MODAL_CREATE = 'create_board';
+const BOARD_TYPE_ICONS: Record<BoardType, React.ReactNode> = {
+  kanban: <Icon24Squareshape3VerticalOutline />,
+  brainstorm: <Icon24BrainOutline />,
+  notes: <Icon24DocumentListOutline />,
+};
+
+const MODAL_CREATE = "create_board";
 
 interface Props {
   id: string;
@@ -43,24 +67,36 @@ interface Props {
 
 export function HomePanel({ id }: Props) {
   const navigator = useRouteNavigator();
+  const { panel } = useActiveVkuiLocation();
+  const { showFab, hideFab } = useFab();
   const { boards, loading, error, refresh, createBoard } = useBoards();
 
-  const [activeTab, setActiveTab] = useState<'recent' | 'mine'>('recent');
+  const [activeTab, setActiveTab] = useState<"recent" | "mine">("recent");
   const [activeModal, setActiveModal] = useState<string | null>(null);
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [coverImage, setCoverImage] = useState('');
-  const [boardType, setBoardType] = useState<BoardType>('voting');
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [coverImage, setCoverImage] = useState("");
+  const [boardType, setBoardType] = useState<BoardType>("kanban");
   const [creating, setCreating] = useState(false);
   const [snackbar, setSnackbar] = useState<string | null>(null);
 
   const openCreate = () => {
-    setTitle('Новая доска');
-    setDescription('');
-    setCoverImage('');
-    setBoardType('voting');
+    setTitle("Новая доска");
+    setDescription("");
+    setCoverImage("");
+    setBoardType("kanban");
     setActiveModal(MODAL_CREATE);
   };
+
+  useEffect(() => {
+    if (panel !== PANELS.HOME) return;
+    if (activeModal) {
+      hideFab();
+      return;
+    }
+    showFab(openCreate);
+    // openCreate is recreated on every render — intentional, FAB always gets fresh handler
+  }, [panel, activeModal, showFab, hideFab]);
 
   const handleCreate = async () => {
     if (!title.trim()) return;
@@ -83,7 +119,7 @@ export function HomePanel({ id }: Props) {
 
   const openBoard = (boardId: string) => navigator.push(`/board/${boardId}`);
 
-  const myBoards = boards.filter((b) => b.myRole === 'admin');
+  const myBoards = boards.filter((b) => b.myRole === "admin");
 
   const recentIds = getRecentBoardIds();
   const recentBoards = recentIds
@@ -92,163 +128,96 @@ export function HomePanel({ id }: Props) {
   const unseenBoards = boards.filter((b) => !recentIds.includes(b.id));
   const allRecentBoards = [...recentBoards, ...unseenBoards];
 
-  const tabBoards = activeTab === 'mine' ? myBoards : allRecentBoards;
+  const tabBoards = activeTab === "mine" ? myBoards : allRecentBoards;
 
-  const modal = (
+  const newBoardModal = (
     <ModalRoot activeModal={activeModal} onClose={() => setActiveModal(null)}>
       <ModalPage
         id={MODAL_CREATE}
-        hideCloseButton
+        dynamicContentHeight
         header={
-          <ModalPageHeader after={<PanelHeaderClose onClick={() => setActiveModal(null)} />}>
-            Новая доска идей
+          <ModalPageHeader
+          >
+            Новая доска
           </ModalPageHeader>
         }
       >
-        <Box>
-          <FormItem top="Название *">
-            <Input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Например: Подарок Пете"
-              maxLength={100}
-              autoFocus
-              onFocus={(e) => e.target.select()}
-            />
-          </FormItem>
-          <FormItem top="Описание">
-            <Textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="О чём будем собирать идеи?"
-              maxLength={300}
-              rows={2}
-            />
-          </FormItem>
-          <FormItem top="Обложка (URL картинки)">
-            <Input
-              value={coverImage}
-              onChange={(e) => setCoverImage(e.target.value)}
-              placeholder="https://example.com/image.jpg"
-            />
-            {coverImage.trim() && (
-              <img
-                src={`/api/images?url=${encodeURIComponent(coverImage.trim())}`}
-                alt="preview"
-                style={{ marginTop: 8, width: '100%', maxHeight: 120, objectFit: 'cover', borderRadius: 8 }}
-                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+        <ModalPageContent>
+          <Box>
+            <FormItem top="Название *">
+              <Input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Например: дорожная карта"
+                maxLength={100}
+                autoFocus
+                onFocus={(e) => e.target.select()}
               />
-            )}
-          </FormItem>
-          <FormItem top="Тип доски">
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {BOARD_TYPES.map((t) => (
-                <button
-                  key={t.value}
-                  onClick={() => setBoardType(t.value)}
-                  style={{
-                    padding: '6px 12px',
-                    borderRadius: 20,
-                    border: '1.5px solid',
-                    borderColor: boardType === t.value ? 'var(--vkui--color_text_accent)' : 'var(--vkui--color_separator_primary)',
-                    background: boardType === t.value ? 'var(--vkui--color_text_accent)' : 'transparent',
-                    color: boardType === t.value ? '#fff' : 'var(--vkui--color_text_secondary)',
-                    fontSize: 13,
-                    cursor: 'pointer',
-                    fontFamily: 'inherit',
-                    transition: 'background 0.15s, border-color 0.15s',
-                  }}
-                >
-                  {t.label}
-                </button>
-              ))}
-            </div>
-          </FormItem>
-          <FormItem>
-            <Button
-              size="l"
-              stretched
-              onClick={handleCreate}
-              disabled={!title.trim() || creating}
-              loading={creating}
-            >
-              Создать доску
-            </Button>
-          </FormItem>
-        </Box>
+            </FormItem>
+            <FormItem top="Описание">
+              <Textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Для чего полезна эта доска?"
+                maxLength={600}
+                rows={2}
+              />
+            </FormItem>
+            <FormItem top="Тип доски">
+              <div className="board-type-picker">
+                {BOARD_TYPES.map((t) => {
+                  const active = boardType === t.value;
+                  return (
+                    <button
+                      key={t.value}
+                      className={`board-type-btn${active ? " board-type-btn--active" : ""}`}
+                      onClick={() => setBoardType(t.value)}
+                    >
+                      <span className="board-type-btn__icon">
+                        {BOARD_TYPE_ICONS[t.value]}
+                      </span>
+                      <div className="board-type-btn__text">
+                        <div className="board-type-btn__name">{t.label}</div>
+                        <div className="board-type-btn__desc">{t.desc}</div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </FormItem>
+            <FormItem>
+              <Button
+                size="l"
+                stretched
+                onClick={handleCreate}
+                disabled={!title.trim() || creating}
+                loading={creating}
+              >
+                Создать доску
+              </Button>
+            </FormItem>
+          </Box>
+        </ModalPageContent>
       </ModalPage>
     </ModalRoot>
   );
 
   return (
     <Panel id={id}>
-      <PanelHeader style={{ opacity: 0, height: 0, overflow: 'hidden', position: 'absolute' }}>
-        Доски идей
-      </PanelHeader>
-
       <PullToRefresh onRefresh={refresh} isFetching={loading}>
         {/* Hero section */}
-        <div className="hero-bg" style={{ height: '50vh' }}>
+        <div className="hero-bg">
           <div className="hero-orb hero-orb--1" />
           <div className="hero-orb hero-orb--2" />
           <div className="hero-orb hero-orb--3" />
           <div className="hero-orb hero-orb--4" />
 
-          <div
-            className="page-inner"
-            style={{
-              position: 'relative', zIndex: 1,
-              height: '100%',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'flex-start',
-              justifyContent: 'flex-end',
-              padding: '48px 24px 36px',
-              gap: 12,
-            }}
-          >
-            <h1 style={{
-              fontSize: 34,
-              fontWeight: 800,
-              color: '#ffffff',
-              letterSpacing: -0.5,
-              lineHeight: 1.15,
-            }}>
-              Доски идей
-            </h1>
-            <p style={{
-              fontSize: 15,
-              color: 'rgba(255,255,255,0.88)',
-              lineHeight: 1.5,
-              maxWidth: 280,
-            }}>
-              Собирайте и голосуйте за идеи вместе
+          <div className="page-inner hero-bg__content">
+            <h1 className="hero__title">Совместные доски</h1>
+            <p className="hero__subtitle">
+              Коллаборируйтесь с 🫂&nbsp;друзьями 🗣️&nbsp;чатом или
+              👥&nbsp;сообществом.
             </p>
-            <button
-              onClick={openCreate}
-              style={{
-                marginTop: 8,
-                padding: '12px 24px',
-                background: '#ffffff',
-                color: '#3f8ae0',
-                border: 'none',
-                borderRadius: 14,
-                fontSize: 15,
-                fontWeight: 700,
-                cursor: 'pointer',
-                boxShadow: '0 2px 12px rgba(0,0,0,0.18)',
-                fontFamily: 'inherit',
-                transition: 'transform 0.1s, box-shadow 0.1s',
-              }}
-              onMouseDown={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.transform = 'scale(0.97)';
-              }}
-              onMouseUp={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.transform = '';
-              }}
-            >
-              Создать доску
-            </button>
           </div>
         </div>
 
@@ -257,16 +226,16 @@ export function HomePanel({ id }: Props) {
         {!error && (
           <div className="page-inner">
             {/* Tabs */}
-            <Tabs style={{ paddingTop: 4 }}>
+            <Tabs className="home-tabs">
               <TabsItem
-                selected={activeTab === 'recent'}
-                onClick={() => setActiveTab('recent')}
+                selected={activeTab === "recent"}
+                onClick={() => setActiveTab("recent")}
               >
                 Недавние
               </TabsItem>
               <TabsItem
-                selected={activeTab === 'mine'}
-                onClick={() => setActiveTab('mine')}
+                selected={activeTab === "mine"}
+                onClick={() => setActiveTab("mine")}
               >
                 Мои
               </TabsItem>
@@ -274,16 +243,26 @@ export function HomePanel({ id }: Props) {
 
             {/* Board list */}
             {loading && !boards.length ? (
-              <Box style={{ display: 'flex', justifyContent: 'center', paddingTop: 48 }}>
+              <Box
+                style={{
+                  display: "flex",
+                  justifyContent: "center",
+                  paddingTop: 48,
+                }}
+              >
                 <Spinner size="l" />
               </Box>
             ) : tabBoards.length === 0 ? (
               <EmptyState
-                header={activeTab === 'mine' ? 'Ещё нет своих досок' : 'Нет недавних досок'}
+                header={
+                  activeTab === "mine"
+                    ? "Ещё нет своих досок"
+                    : "Нет недавних досок"
+                }
                 text={
-                  activeTab === 'mine'
-                    ? 'Нажмите «Создать доску», чтобы начать'
-                    : 'Откройте доску по ссылке или создайте свою'
+                  activeTab === "mine"
+                    ? "Нажмите «Создать доску», чтобы начать"
+                    : "Откройте доску по ссылке или создайте свою"
                 }
                 actionLabel="Создать доску"
                 onAction={openCreate}
@@ -291,7 +270,11 @@ export function HomePanel({ id }: Props) {
             ) : (
               <div className="board-grid">
                 {tabBoards.map((b) => (
-                  <BoardListItem key={b.id} board={b} onClick={() => openBoard(b.id)} />
+                  <BoardListItem
+                    key={b.id}
+                    board={b}
+                    onClick={() => openBoard(b.id)}
+                  />
                 ))}
               </div>
             )}
@@ -301,21 +284,11 @@ export function HomePanel({ id }: Props) {
         )}
       </PullToRefresh>
 
-      {!error && (
-        <FixedLayout vertical="bottom">
-          <div className="page-inner">
-            <Box style={{ display: 'flex', justifyContent: 'flex-end', paddingRight: 16, paddingBottom: 'max(20px, env(safe-area-inset-bottom))' }}>
-              <button className="fab" onClick={openCreate} aria-label="Создать доску идей">
-                <Icon28AddOutline />
-              </button>
-            </Box>
-          </div>
-        </FixedLayout>
+      {newBoardModal}
+
+      {snackbar && (
+        <Snackbar onClose={() => setSnackbar(null)}>{snackbar}</Snackbar>
       )}
-
-      {modal}
-
-      {snackbar && <Snackbar onClose={() => setSnackbar(null)}>{snackbar}</Snackbar>}
     </Panel>
   );
 }

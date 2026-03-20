@@ -5,6 +5,13 @@ import { requireAuth } from '../middleware/auth';
 const router = Router();
 router.use(requireAuth);
 
+type BoardType = 'kanban' | 'brainstorm' | 'notes';
+const VALID_BOARD_TYPES: BoardType[] = ['kanban', 'brainstorm', 'notes'];
+
+function isBoardType(value: unknown): value is BoardType {
+  return typeof value === 'string' && VALID_BOARD_TYPES.includes(value as BoardType);
+}
+
 // ── In-memory presence store ──────────────────────────────────────────────────
 type PresenceUser = { userId: number; firstName: string; lastName: string; photo100: string; ts: number };
 const boardPresence = new Map<string, Map<number, PresenceUser>>();
@@ -51,8 +58,6 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
   res.json(boards);
 });
 
-const VALID_BOARD_TYPES = ['voting', 'kanban', 'brainstorm', 'retro'];
-
 // POST /api/boards — create board, assign creator as admin
 router.post('/', async (req: Request, res: Response): Promise<void> => {
   const userId = req.user!.userId;
@@ -69,7 +74,7 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
     return;
   }
 
-  const resolvedType = VALID_BOARD_TYPES.includes(boardType ?? '') ? (boardType as any) : 'voting';
+  const resolvedType: BoardType = isBoardType(boardType) ? boardType : 'kanban';
 
   const board = await prisma.board.create({
     data: {
@@ -128,14 +133,20 @@ router.patch('/:id', async (req: Request, res: Response): Promise<void> => {
     return;
   }
 
-  const data: Record<string, any> = {};
+  type BoardUpdatePayload = {
+    title?: string;
+    description?: string | null;
+    coverImage?: string | null;
+    boardType?: BoardType;
+  };
+  const data: BoardUpdatePayload = {};
   if (title !== undefined) {
     if (!title.trim()) { res.status(400).json({ error: 'title cannot be empty' }); return; }
     data.title = title.trim();
   }
   if (description !== undefined) data.description = description.trim() || null;
   if (coverImage !== undefined) data.coverImage = coverImage.trim() || null;
-  if (boardType !== undefined && VALID_BOARD_TYPES.includes(boardType)) data.boardType = boardType;
+  if (boardType !== undefined && isBoardType(boardType)) data.boardType = boardType;
 
   const board = await prisma.board.update({ where: { id }, data });
   res.json({ ...board, myRole: role.role });

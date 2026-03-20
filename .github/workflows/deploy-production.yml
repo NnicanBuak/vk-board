@@ -1,0 +1,26 @@
+name: Deploy — Production
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install backend deps
+        run: npm ci
+        working-directory: server
+
+      - name: Build
+        run: npm run build
+        working-directory: server

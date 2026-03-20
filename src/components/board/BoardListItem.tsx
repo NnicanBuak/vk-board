@@ -21,10 +21,9 @@ function pickGradient(id: string): string {
 }
 
 const TYPE_LABELS: Record<BoardType, string> = {
-  voting:    '🗳 Голосование',
-  kanban:    '📋 Задачи',
-  brainstorm:'🧠 Штурм',
-  retro:     '🔄 Ретро',
+  kanban:    'Канбан',
+  brainstorm:'Брейншторм',
+  notes:     'Заметки',
 };
 
 interface Props {
@@ -53,7 +52,7 @@ export function BoardListItem({ board, onClick }: Props) {
         )}
         <div className="board-card__footer">
           <span className="board-card__date">{formatRelative(board.createdAt)}</span>
-          <span className="board-card__type">{TYPE_LABELS[board.boardType]}</span>
+          <span className="board-card__type">{TYPE_LABELS[board.boardType] ?? board.boardType}</span>
         </div>
       </div>
     </div>

@@ -12,6 +12,7 @@ export function useBoardDetail(boardId: string) {
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    if (!boardId) return;
     const hit = cacheGet<Board>(cacheKey);
     if (hit) {
       setBoard(hit);
@@ -31,7 +32,7 @@ export function useBoardDetail(boardId: string) {
     } finally {
       setLoading(false);
     }
-  }, [boardId]);
+  }, [boardId, cacheKey]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -47,9 +48,9 @@ export function useBoardDetail(boardId: string) {
       setBoard(prev);
       setError((e as Error).message);
     }
-  }, [board, boardId]);
+  }, [board, boardId, cacheKey]);
 
-  const updateBoard = useCallback(async (data: { title?: string; description?: string; coverImage?: string; boardType?: string }) => {
+  const updateBoard = useCallback(async (data: { title?: string; description?: string; coverImage?: string; boardType?: string; visibility?: string; groupId?: string | null }) => {
     if (!board) return;
     const prev = board;
     setBoard({ ...board, ...data } as Board);
@@ -61,7 +62,7 @@ export function useBoardDetail(boardId: string) {
       setBoard(prev);
       throw e;
     }
-  }, [board, boardId]);
+  }, [board, boardId, cacheKey]);
 
   return { board, loading, error, refresh: load, renameBoard, updateBoard };
 }
