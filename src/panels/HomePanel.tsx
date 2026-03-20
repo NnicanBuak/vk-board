@@ -13,10 +13,8 @@ import {
   ModalPage,
   ModalPageContent,
   ModalPageHeader,
-  PanelHeaderClose,
   Tabs,
   TabsItem,
-  usePlatform,
 } from "@vkontakte/vkui";
 import {
   useRouteNavigator,
@@ -72,7 +70,6 @@ export function HomePanel({ id }: Props) {
   const { panel } = useActiveVkuiLocation();
   const { showFab, hideFab } = useFab();
   const { boards, loading, error, refresh, createBoard } = useBoards();
-  const platform = usePlatform();
 
   const [activeTab, setActiveTab] = useState<"recent" | "mine">("recent");
   const [activeModal, setActiveModal] = useState<string | null>(null);
@@ -140,8 +137,6 @@ export function HomePanel({ id }: Props) {
         dynamicContentHeight
         header={
           <ModalPageHeader
-          // before={platform !== "ios" && <PanelHeaderClose onClick={() => setActiveModal(null)} />}
-          // after={platform === "ios" && <PanelHeaderClose onClick={() => setActiveModal(null)} />}
           >
             Новая доска
           </ModalPageHeader>

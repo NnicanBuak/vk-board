@@ -256,10 +256,16 @@ body {
 }
 
 /* ── Board page title (second-level heading below PanelHeader) ── */
-.board-page-title {
-  display: block;
-  width: 100%;
+.board-page-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   padding: 14px 16px 10px;
+  justify-content: space-between;
+}
+
+.board-page-title {
+  flex: 1;
   margin: 0;
   font-size: 24px;
   font-weight: 700;
@@ -1225,19 +1231,21 @@ body {
 }
 
 /* ── Modal page constraints ── */
-/* VKUI uses CSS modules (hashed classnames), so we override via CSS variables on :root */
+/* VKUI uses CSS modules, so target class fragments instead of exact names */
 :root {
   --vkui--size_popup_small--regular: min(768px, 100%) !important;
 }
 
-/* Mirror ActionSheet host spacing so ModalPage keeps the same horizontal inset everywhere */
-.vkuiModalPage__hostMobile {
-  padding-inline: 10px !important;
-  box-sizing: border-box !important;
-}
-
-.vkuiModalPage__hostDesktop {
-  padding-inline: 10px !important;
+@media (max-width: 767px) {
+  .vkuiModalRoot__modal [class*="vkuiModalPage__document"] {
+    box-sizing: border-box !important;
+    inset-inline-start: 16px !important;
+    inset-inline-end: 16px !important;
+    left: 16px !important;
+    right: 16px !important;
+    width: calc(100% - 32px) !important;
+    max-width: calc(100% - 32px) !important;
+  }
 }
 
 /* ── ActionSheet separators ── */
@@ -1386,6 +1394,12 @@ body {
   top: 0;
   z-index: 10;
   background: var(--vkui--color_background_content);
+}
+
+.brainstorm__header--inline {
+  padding: 0;
+  position: static;
+  background: transparent;
 }
 
 .brainstorm__sort-btn {

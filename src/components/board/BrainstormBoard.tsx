@@ -1,15 +1,12 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   ModalRoot,
   ModalPage,
   ModalPageContent,
   ModalPageHeader,
   Button,
-  ActionSheet,
-  ActionSheetItem,
-  Separator,
 } from '@vkontakte/vkui';
-import { Icon16Like, Icon16LikeOutline, Icon16SortArrowUp, Icon16SortArrowDown, Icon16ClockOutline } from '@vkontakte/icons';
+import { Icon16Like, Icon16LikeOutline } from '@vkontakte/icons';
 import { CardForm } from '../card/CardForm';
 import type { Card } from '../../types/card';
 
@@ -83,55 +80,39 @@ interface BrainstormBoardProps {
   onCardClick: (card: Card) => void;
   onSnackbar: (msg: string) => void;
   registerFabAction?: (handler: (() => void) | null) => void;
+  sortMode: 'likes' | 'date';
+  sortDirection: 'desc' | 'asc';
 }
 
 export function BrainstormBoard({
-  cards, canEdit, userId,
-  addCard, toggleLike, onCardClick, onSnackbar, registerFabAction,
+  cards,
+  canEdit,
+  userId,
+  addCard,
+  toggleLike,
+  onCardClick,
+  onSnackbar,
+  registerFabAction,
+  sortMode,
+  sortDirection,
 }: BrainstormBoardProps) {
   const [activeModal, setActiveModal] = useState<string | null>(null);
-
-  const [sort, setSort] = useState<'likes' | 'date'>('likes');
 
   useEffect(() => {
     if (!canEdit || !registerFabAction) return undefined;
     registerFabAction(() => setActiveModal(MODAL_CARD));
     return () => registerFabAction(null);
   }, [canEdit, registerFabAction]);
-  const [direction, setDirection] = useState<'desc' | 'asc'>('desc');
-  const [showSortSheet, setShowSortSheet] = useState(false);
-  const sortBtnRef = useRef<HTMLButtonElement>(null);
-  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const sorted = [...cards].sort((a, b) => {
-    const mul = direction === 'desc' ? 1 : -1;
-    if (sort === 'likes') {
-      return mul * (b.likeCount - a.likeCount || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    }
-    return mul * (new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  });
-
-  const handleSortPointerDown = () => {
-    longPressTimer.current = setTimeout(() => {
-      longPressTimer.current = null;
-      setShowSortSheet(true);
-    }, 400);
-  };
-
-  const handleSortPointerUp = () => {
-    if (longPressTimer.current !== null) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-      setDirection(d => d === 'desc' ? 'asc' : 'desc');
-    }
-  };
-
-  const handleSortPointerLeave = () => {
-    if (longPressTimer.current !== null) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-    }
-  };
+  const sorted = useMemo(() => {
+    const mul = sortDirection === 'desc' ? 1 : -1;
+    return [...cards].sort((a, b) => {
+      if (sortMode === 'likes') {
+        return mul * (b.likeCount - a.likeCount || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      }
+      return mul * (new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    });
+  }, [cards, sortMode, sortDirection]);
 
   const handleCardSave = async (data: { title: string; description?: string; url?: string }) => {
     try {
@@ -145,21 +126,6 @@ export function BrainstormBoard({
   return (
     <>
       <div className="brainstorm">
-        <div className="brainstorm__header">
-          <button
-            ref={sortBtnRef}
-            className="brainstorm__sort-btn"
-            onPointerDown={handleSortPointerDown}
-            onPointerUp={handleSortPointerUp}
-            onPointerLeave={handleSortPointerLeave}
-            onContextMenu={(e) => e.preventDefault()}
-            aria-label="Сортировка"
-          >
-            {direction === 'desc' ? <Icon16SortArrowDown /> : <Icon16SortArrowUp />}
-            {sort === 'likes' ? 'По лайкам' : 'По дате'}
-          </button>
-        </div>
-
         {sorted.length === 0 ? (
           <div className="brainstorm__empty">
             <p>Пока нет идей</p>
@@ -186,24 +152,6 @@ export function BrainstormBoard({
         <div style={{ height: 88 }} />
       </div>
 
-
-      {showSortSheet && (
-        <ActionSheet onClose={() => setShowSortSheet(false)} toggleRef={sortBtnRef}>
-          <ActionSheetItem
-            before={<Icon16Like />}
-            onClick={() => { setSort('likes'); setShowSortSheet(false); }}
-          >
-            По лайкам
-          </ActionSheetItem>
-          <Separator />
-          <ActionSheetItem
-            before={<Icon16ClockOutline />}
-            onClick={() => { setSort('date'); setShowSortSheet(false); }}
-          >
-            По дате
-          </ActionSheetItem>
-        </ActionSheet>
-      )}
 
       <ModalRoot activeModal={activeModal} onClose={() => setActiveModal(null)}>
         <ModalPage

@@ -7,6 +7,7 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+.npm-cache/
 node_modules
 server/node_modules
 dist
@@ -24,8 +25,10 @@ server/prisma/*.db
 
 # Editor directories and files
 .claude/
+.codex/
+tasks/
 DEVLOG.md
-.vscode/*
+.vscode/
 !.vscode/extensions.json
 .idea
 .DS_Store

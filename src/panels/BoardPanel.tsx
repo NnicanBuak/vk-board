@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, type JSX } from 'react';
 import {
   Panel,
   PanelHeader,
@@ -18,13 +18,17 @@ import {
   Textarea,
   Button,
   Alert,
-  ActionSheet,
-  ActionSheetItem,
+  List,
+  CellButton,
 } from '@vkontakte/vkui';
 import {
   Icon24LinkedOutline,
-  Icon24UsersOutline,
   Icon24MoreHorizontal,
+  Icon16SortArrowUp,
+  Icon16SortArrowDown,
+  Icon16Like,
+  Icon16ClockOutline,
+  Icon16Done,
 } from '@vkontakte/icons';
 import { useRouteNavigator, useParams, useActiveVkuiLocation } from '@vkontakte/vk-mini-apps-router';
 import { useFab } from '../store/fabState';
@@ -54,6 +58,8 @@ function memberColor(userId: number) { return AVATAR_COLORS[userId % AVATAR_COLO
 const MODAL_RENAME = 'board_rename';
 const MODAL_DESC = 'board_desc';
 const MODAL_COVER = 'board_cover';
+const MODAL_SORT = 'brainstorm_sort';
+const MODAL_ACTIONS = 'board_actions';
 
 const BOARD_TYPE_LABELS: Record<string, string> = {
   kanban: 'Канбан',
@@ -81,10 +87,13 @@ export function BoardPanel({ id }: Props) {
   const userId = user?.userId ?? 0;
 
   const [activeModal, setActiveModal] = useState<string | null>(null);
-  const [showActionSheet, setShowActionSheet] = useState(false);
   const fabActionRef = useRef<(() => void) | null>(null);
   const [selectedCard, setSelectedCard] = useState<Card | null>(null);
   const [snackbar, setSnackbar] = useState<string | null>(null);
+  const [brainstormSort, setBrainstormSort] = useState<'likes' | 'date'>('likes');
+  const [brainstormDirection, setBrainstormDirection] = useState<'desc' | 'asc'>('desc');
+  const sortHoldTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sortLongPressTriggered = useRef(false);
 
   // Mini-modal state
   const [editTitle, setEditTitle] = useState('');
@@ -100,7 +109,6 @@ export function BoardPanel({ id }: Props) {
   const [viewersOpen, setViewersOpen] = useState(false);
   const viewersBtnRef = useRef<HTMLDivElement>(null);
   const coverFileRef = useRef<HTMLInputElement>(null);
-  const actionSheetRef = useRef<HTMLElement>(null);
 
   const { board, loading: boardLoading, error: boardError, refresh: refreshBoard, updateBoard } = useBoardDetail(boardId);
   const { cards, loading: cardsLoading, error: cardsError, refresh: refreshCards, addCard, updateCard, removeCard, toggleLike } = useCards(boardId, 'date');
@@ -250,6 +258,16 @@ export function BoardPanel({ id }: Props) {
     setActiveModal(MODAL_COVER);
   };
 
+  const handleOpenAccessSettings = () => {
+    setActiveModal(null);
+    navigator.push(`/board/${boardId}/access`);
+  };
+
+  const handleAskDelete = () => {
+    setActiveModal(null);
+    setShowDeleteAlert(true);
+  };
+
   const handleSaveTitle = async () => {
     if (!editTitle.trim()) return;
     setSaving(true);
@@ -280,6 +298,66 @@ export function BoardPanel({ id }: Props) {
 
 
   const boardType = board?.boardType ?? 'kanban';
+
+  useEffect(() => {
+    if (boardType !== 'brainstorm' && activeModal === MODAL_SORT) {
+      setActiveModal(null);
+    }
+  }, [boardType, activeModal]);
+
+  useEffect(() => {
+    if (!isAdmin && activeModal === MODAL_ACTIONS) {
+      setActiveModal(null);
+    }
+  }, [isAdmin, activeModal]);
+
+  useEffect(() => {
+    return () => {
+      if (sortHoldTimer.current) {
+        clearTimeout(sortHoldTimer.current);
+        sortHoldTimer.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    setBrainstormSort('likes');
+    setBrainstormDirection('desc');
+  }, [boardId]);
+
+  const cancelBrainstormSortTimer = () => {
+    if (sortHoldTimer.current !== null) {
+      clearTimeout(sortHoldTimer.current);
+      sortHoldTimer.current = null;
+      return true;
+    }
+    return false;
+  };
+
+  const handleBrainstormSortPointerDown = () => {
+    sortLongPressTriggered.current = false;
+    sortHoldTimer.current = setTimeout(() => {
+      sortHoldTimer.current = null;
+      sortLongPressTriggered.current = true;
+      setActiveModal(MODAL_SORT);
+    }, 400);
+  };
+
+  const handleBrainstormSortPointerUp = () => {
+    if (cancelBrainstormSortTimer() && !sortLongPressTriggered.current) {
+      setBrainstormDirection((d) => (d === 'desc' ? 'asc' : 'desc'));
+    }
+  };
+
+  const handleBrainstormSortPointerLeave = () => {
+    cancelBrainstormSortTimer();
+  };
+
+  const handleSelectBrainstormSort = (mode: 'likes' | 'date') => {
+    setBrainstormSort(mode);
+    setActiveModal(null);
+  };
+
   useEffect(() => {
     const active = panel === PANELS.BOARD && canEdit && boardType !== 'notes';
     if (!active) {
@@ -292,6 +370,212 @@ export function BoardPanel({ id }: Props) {
   const registerFabAction = useCallback((handler: (() => void) | null) => {
     fabActionRef.current = handler;
   }, []);
+
+  const closeModal = () => setActiveModal(null);
+
+  const modals: JSX.Element[] = [];
+
+  if (isAdmin) {
+    modals.push(
+      <ModalPage
+        key={MODAL_ACTIONS}
+        id={MODAL_ACTIONS}
+        settlingHeight={50}
+        hideCloseButton
+        header={
+          <ModalPageHeader after={<PanelHeaderClose onClick={closeModal} />}>
+            Действия с доской
+          </ModalPageHeader>
+        }
+      >
+        <ModalPageContent>
+          <List>
+            <CellButton onClick={openRename}>
+              Переименовать
+            </CellButton>
+            <CellButton onClick={openDesc}>
+              Изменить описание
+            </CellButton>
+            <CellButton onClick={openCover}>
+              Изменить обложку
+            </CellButton>
+            <CellButton onClick={handleOpenAccessSettings}>
+              Настройки доступа
+            </CellButton>
+            <CellButton appearance="negative" onClick={handleAskDelete}>
+              Удалить доску
+            </CellButton>
+          </List>
+        </ModalPageContent>
+      </ModalPage>,
+    );
+  }
+
+  if (boardType === 'brainstorm') {
+    modals.push(
+      <ModalPage
+        key={MODAL_SORT}
+        id={MODAL_SORT}
+        dynamicContentHeight
+        hideCloseButton
+        header={
+          <ModalPageHeader after={<PanelHeaderClose onClick={closeModal} />}>
+            Сортировка
+          </ModalPageHeader>
+        }
+      >
+        <ModalPageContent>
+          <List>
+            <CellButton
+              before={<Icon16Like />}
+              after={brainstormSort === 'likes' ? <Icon16Done /> : undefined}
+              onClick={() => handleSelectBrainstormSort('likes')}
+            >
+              По лайкам
+            </CellButton>
+            <CellButton
+              before={<Icon16ClockOutline />}
+              after={brainstormSort === 'date' ? <Icon16Done /> : undefined}
+              onClick={() => handleSelectBrainstormSort('date')}
+            >
+              По дате
+            </CellButton>
+          </List>
+        </ModalPageContent>
+      </ModalPage>,
+    );
+  }
+
+  modals.push(
+    <ModalPage
+      key={MODAL_RENAME}
+      id={MODAL_RENAME}
+      dynamicContentHeight
+      hideCloseButton
+      header={
+        <ModalPageHeader after={<PanelHeaderClose onClick={closeModal} />}>
+          Название доски
+        </ModalPageHeader>
+      }
+    >
+      <ModalPageContent>
+        <Box>
+          <FormItem top="Название *">
+            <Input
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              maxLength={100}
+              autoFocus
+              onKeyDown={(e) => e.key === 'Enter' && handleSaveTitle()}
+            />
+          </FormItem>
+          <FormItem>
+            <Button size="l" stretched onClick={handleSaveTitle} disabled={!editTitle.trim() || saving} loading={saving}>
+              Сохранить
+            </Button>
+          </FormItem>
+        </Box>
+      </ModalPageContent>
+    </ModalPage>,
+    <ModalPage
+      key={MODAL_DESC}
+      id={MODAL_DESC}
+      dynamicContentHeight
+      hideCloseButton
+      header={
+        <ModalPageHeader after={<PanelHeaderClose onClick={closeModal} />}>
+          Описание доски
+        </ModalPageHeader>
+      }
+    >
+      <ModalPageContent>
+        <Box>
+          <FormItem top="Описание">
+            <Textarea
+              value={editDesc}
+              onChange={(e) => setEditDesc(e.target.value)}
+              placeholder="Необязательно"
+              maxLength={300}
+              rows={4}
+              autoFocus
+            />
+          </FormItem>
+          <FormItem>
+            <Button size="l" stretched onClick={handleSaveDesc} disabled={saving} loading={saving}>
+              Сохранить
+            </Button>
+          </FormItem>
+        </Box>
+      </ModalPageContent>
+    </ModalPage>,
+    <ModalPage
+      key={MODAL_COVER}
+      id={MODAL_COVER}
+      dynamicContentHeight
+      hideCloseButton
+      header={
+        <ModalPageHeader after={<PanelHeaderClose onClick={closeModal} />}>
+          Обложка доски
+        </ModalPageHeader>
+      }
+    >
+      <ModalPageContent>
+        <Box>
+          <FormItem>
+            <input
+              ref={coverFileRef}
+              type="file"
+              accept="image/*"
+              style={{ display: 'none' }}
+              onChange={handleCoverFile}
+            />
+            {coverPreview && (
+              <img
+                src={coverPreview}
+                alt="preview"
+                style={{ width: '100%', maxHeight: 160, objectFit: 'cover', borderRadius: 8, marginBottom: 8 }}
+              />
+            )}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+              <Button
+                size="m"
+                mode="secondary"
+                stretched
+                loading={uploadingCover}
+                disabled={uploadingCover}
+                onClick={() => coverFileRef.current?.click()}
+              >
+                С устройства
+              </Button>
+              <Button
+                size="m"
+                mode="secondary"
+                stretched
+                onClick={handleVKGallery}
+              >
+                Из VK Фото
+              </Button>
+            </div>
+            {coverPreview && (
+              <Button
+                size="m"
+                appearance="negative"
+                mode="outline"
+                stretched
+                style={{ marginBottom: 8 }}
+                onClick={() => { setCoverUrl(''); setCoverPreview(''); }}
+              >
+                Убрать обложку
+              </Button>
+            )}
+            <Button size="l" stretched onClick={handleSaveCover} disabled={saving} loading={saving}>
+              Сохранить
+            </Button>
+          </FormItem>
+        </Box>
+      </ModalPageContent>
+    </ModalPage>,
+  );
 
   return (
     <Panel id={id}>
@@ -335,8 +619,7 @@ export function BoardPanel({ id }: Props) {
             </PanelHeaderButton>
             {isAdmin && (
               <PanelHeaderButton
-                getRootRef={actionSheetRef}
-                onClick={() => setShowActionSheet(true)}
+                onClick={() => setActiveModal(MODAL_ACTIONS)}
                 aria-label="Действия с доской"
               >
                 <Icon24MoreHorizontal />
@@ -357,7 +640,24 @@ export function BoardPanel({ id }: Props) {
         ) : (
           <div className="page-inner">
             {/* Board title + description */}
-            <h2 className="board-page-title">{board?.title ?? ''}</h2>
+            <div className="board-page-title-row">
+              <h2 className="board-page-title">{board?.title ?? ''}</h2>
+              {boardType === 'brainstorm' && (
+                <div className="brainstorm__header brainstorm__header--inline">
+                  <button
+                    className="brainstorm__sort-btn"
+                    onPointerDown={handleBrainstormSortPointerDown}
+                    onPointerUp={handleBrainstormSortPointerUp}
+                    onPointerLeave={handleBrainstormSortPointerLeave}
+                    onContextMenu={(e) => e.preventDefault()}
+                    aria-label="Сортировка карточек"
+                  >
+                    {brainstormDirection === 'desc' ? <Icon16SortArrowDown /> : <Icon16SortArrowUp />}
+                    {brainstormSort === 'likes' ? 'По лайкам' : 'По дате'}
+                  </button>
+                </div>
+              )}
+            </div>
             {board?.description && <p className="board-page-desc">{board.description}</p>}
 
             {loading ? (
@@ -391,6 +691,8 @@ export function BoardPanel({ id }: Props) {
                 onCardClick={setSelectedCard}
                 onSnackbar={setSnackbar}
                 registerFabAction={registerFabAction}
+                sortMode={brainstormSort}
+                sortDirection={brainstormDirection}
               />
             ) : (
               <NotesBoard
@@ -403,159 +705,9 @@ export function BoardPanel({ id }: Props) {
         )}
       </PullToRefresh>
 
-      {/* ActionSheet: board settings */}
-      {showActionSheet && (
-        <ActionSheet toggleRef={actionSheetRef} onClose={() => setShowActionSheet(false)}>
-          <ActionSheetItem onClick={() => { setShowActionSheet(false); openRename(); }}>
-            Переименовать
-          </ActionSheetItem>
-          <ActionSheetItem onClick={() => { setShowActionSheet(false); openDesc(); }}>
-            Изменить описание
-          </ActionSheetItem>
-          <ActionSheetItem onClick={() => { setShowActionSheet(false); openCover(); }}>
-            Изменить обложку
-          </ActionSheetItem>
-          <ActionSheetItem onClick={() => { setShowActionSheet(false); navigator.push(`/board/${boardId}/access`); }}>
-            Настройки доступа
-          </ActionSheetItem>
-          <ActionSheetItem mode="destructive" onClick={() => { setShowActionSheet(false); setShowDeleteAlert(true); }}>
-            Удалить доску
-          </ActionSheetItem>
-        </ActionSheet>
-      )}
-
       {/* Mini modals */}
-      <ModalRoot activeModal={activeModal} onClose={() => setActiveModal(null)}>
-        {/* Rename */}
-        <ModalPage
-          id={MODAL_RENAME}
-          dynamicContentHeight
-          hideCloseButton
-          header={
-            <ModalPageHeader after={<PanelHeaderClose onClick={() => setActiveModal(null)} />}>
-              Название доски
-            </ModalPageHeader>
-          }
-        >
-          <ModalPageContent>
-            <Box>
-              <FormItem top="Название *">
-                <Input
-                  value={editTitle}
-                  onChange={(e) => setEditTitle(e.target.value)}
-                  maxLength={100}
-                  autoFocus
-                  onKeyDown={(e) => e.key === 'Enter' && handleSaveTitle()}
-                />
-              </FormItem>
-              <FormItem>
-                <Button size="l" stretched onClick={handleSaveTitle} disabled={!editTitle.trim() || saving} loading={saving}>
-                  Сохранить
-                </Button>
-              </FormItem>
-            </Box>
-          </ModalPageContent>
-        </ModalPage>
-
-        {/* Description */}
-        <ModalPage
-          id={MODAL_DESC}
-          dynamicContentHeight
-          hideCloseButton
-          header={
-            <ModalPageHeader after={<PanelHeaderClose onClick={() => setActiveModal(null)} />}>
-              Описание доски
-            </ModalPageHeader>
-          }
-        >
-          <ModalPageContent>
-            <Box>
-              <FormItem top="Описание">
-                <Textarea
-                  value={editDesc}
-                  onChange={(e) => setEditDesc(e.target.value)}
-                  placeholder="Необязательно"
-                  maxLength={300}
-                  rows={4}
-                  autoFocus
-                />
-              </FormItem>
-              <FormItem>
-                <Button size="l" stretched onClick={handleSaveDesc} disabled={saving} loading={saving}>
-                  Сохранить
-                </Button>
-              </FormItem>
-            </Box>
-          </ModalPageContent>
-        </ModalPage>
-
-        {/* Cover */}
-        <ModalPage
-          id={MODAL_COVER}
-          dynamicContentHeight
-          hideCloseButton
-          header={
-            <ModalPageHeader after={<PanelHeaderClose onClick={() => setActiveModal(null)} />}>
-              Обложка доски
-            </ModalPageHeader>
-          }
-        >
-          <ModalPageContent>
-            <Box>
-              <FormItem>
-                <input
-                  ref={coverFileRef}
-                  type="file"
-                  accept="image/*"
-                  style={{ display: 'none' }}
-                  onChange={handleCoverFile}
-                />
-                {coverPreview && (
-                  <img
-                    src={coverPreview}
-                    alt="preview"
-                    style={{ width: '100%', maxHeight: 160, objectFit: 'cover', borderRadius: 8, marginBottom: 8 }}
-                  />
-                )}
-                <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                  <Button
-                    size="m"
-                    mode="secondary"
-                    stretched
-                    loading={uploadingCover}
-                    disabled={uploadingCover}
-                    onClick={() => coverFileRef.current?.click()}
-                  >
-                    С устройства
-                  </Button>
-                  <Button
-                    size="m"
-                    mode="secondary"
-                    stretched
-                    onClick={handleVKGallery}
-                  >
-                    Из VK Фото
-                  </Button>
-                </div>
-                {coverPreview && (
-                  <Button
-                    size="m"
-                    appearance="negative"
-                    mode="outline"
-                    stretched
-                    style={{ marginBottom: 8 }}
-                    onClick={() => { setCoverUrl(''); setCoverPreview(''); }}
-                  >
-                    Убрать обложку
-                  </Button>
-                )}
-                <Button size="l" stretched onClick={handleSaveCover} disabled={saving} loading={saving}>
-                  Сохранить
-                </Button>
-              </FormItem>
-            </Box>
-          </ModalPageContent>
-        </ModalPage>
+      <ModalRoot activeModal={activeModal} onClose={closeModal}>
+        {modals}
       </ModalRoot>
 
       {showDeleteAlert && (
