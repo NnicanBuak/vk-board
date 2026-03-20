@@ -140,8 +140,8 @@ export function HomePanel({ id }: Props) {
         dynamicContentHeight
         header={
           <ModalPageHeader
-            before={platform !== "ios" && <PanelHeaderClose onClick={() => setActiveModal(null)} />}
-            after={platform === "ios" && <PanelHeaderClose onClick={() => setActiveModal(null)} />}
+          // before={platform !== "ios" && <PanelHeaderClose onClick={() => setActiveModal(null)} />}
+          // after={platform === "ios" && <PanelHeaderClose onClick={() => setActiveModal(null)} />}
           >
             Новая доска
           </ModalPageHeader>

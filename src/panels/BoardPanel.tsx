@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   Panel,
   PanelHeader,
@@ -52,13 +52,13 @@ const AVATAR_COLORS = ['#e53935', '#8e24aa', '#1e88e5', '#00897b', '#f4511e', '#
 function memberColor(userId: number) { return AVATAR_COLORS[userId % AVATAR_COLORS.length]; }
 
 const MODAL_RENAME = 'board_rename';
-const MODAL_DESC   = 'board_desc';
-const MODAL_COVER  = 'board_cover';
+const MODAL_DESC = 'board_desc';
+const MODAL_COVER = 'board_cover';
 
 const BOARD_TYPE_LABELS: Record<string, string> = {
-  kanban:    'Канбан',
-  brainstorm:'Брейншторм',
-  notes:     'Заметки',
+  kanban: 'Канбан',
+  brainstorm: 'Брейншторм',
+  notes: 'Заметки',
 };
 
 const VK_APP_ID = Number(import.meta.env.VITE_VK_APP_ID ?? 0);
@@ -111,14 +111,17 @@ export function BoardPanel({ id }: Props) {
   const loading = boardLoading || cardsLoading || columnsLoading;
   const error = boardError ?? cardsError;
 
-  const selfInfo = user ? { firstName: user.firstName, lastName: user.lastName, photo100: user.photo100 ?? '' } : null;
+  const selfInfo = useMemo(
+    () => (user ? { firstName: user.firstName, lastName: user.lastName, photo100: user.photo100 ?? '' } : null),
+    [user],
+  );
   const viewers = usePresence(boardId, selfInfo);
 
   // Load tags + members
   useEffect(() => {
     if (!boardId) return;
-    tagsApi.list(boardId).then(setBoardTags).catch(() => {});
-    boardsApi.members(boardId).then(setBoardMembers).catch(() => {});
+    tagsApi.list(boardId).then(setBoardTags).catch(() => { });
+    boardsApi.members(boardId).then(setBoardMembers).catch(() => { });
   }, [boardId]);
 
   // Close viewers popup on outside click
@@ -136,7 +139,7 @@ export function BoardPanel({ id }: Props) {
     if (!selectedCard) return;
     const updated = cards.find((c) => c.id === selectedCard.id);
     if (updated) setSelectedCard(updated);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cards]);
 
   const handleCopyLink = async () => {
@@ -183,7 +186,7 @@ export function BoardPanel({ id }: Props) {
     if (existing) {
       await tagsApi.assign(selectedCard.id, existing.id);
     } else {
-      const colors = ['#e53935','#8e24aa','#1e88e5','#00897b','#f4511e','#33b679','#fb8c00'];
+      const colors = ['#e53935', '#8e24aa', '#1e88e5', '#00897b', '#f4511e', '#33b679', '#fb8c00'];
       const color = colors[name.length % colors.length];
       const tag = await tagsApi.create({ boardId, name, color });
       setBoardTags((prev) => [...prev, tag]);
@@ -326,11 +329,6 @@ export function BoardPanel({ id }: Props) {
                   </div>
                 )}
               </div>
-            )}
-            {isAdmin && (
-              <PanelHeaderButton onClick={() => navigator.push(`/board/${boardId}/access`)} aria-label="Управление доступом">
-                <Icon24UsersOutline />
-              </PanelHeaderButton>
             )}
             <PanelHeaderButton onClick={handleCopyLink} aria-label="Скопировать ссылку">
               <Icon24LinkedOutline />
