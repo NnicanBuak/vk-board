@@ -116,47 +116,46 @@ export function HomePanel({ id }: Props) {
       <ModalPage
         id={MODAL_CREATE}
         dynamicContentHeight
-        hideCloseButton
         header={
           <ModalPageHeader after={<PanelHeaderClose onClick={() => setActiveModal(null)} />}>
-            <Icon24Cancel />
+            Новая доска
           </ModalPageHeader>
         }
       >
         <ModalPageContent>
           <Box>
-            <FormItem top="�������� *">
+            <FormItem top="Название *">
               <Input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="��������: ������� ����"
+                placeholder="Например: дорожная карта"
                 maxLength={100}
                 autoFocus
                 onFocus={(e) => e.target.select()}
               />
             </FormItem>
-            <FormItem top="��������">
+            <FormItem top="Описание">
               <Textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="� ��� ����� �������� ����?"
-                maxLength={300}
+                placeholder="Для чего полезна эта доска?"
+                maxLength={600}
                 rows={2}
               />
             </FormItem>
-            <FormItem top="��� �����">
+            <FormItem top="Тип доски">
               <div className="board-type-picker">
                 {BOARD_TYPES.map((t) => {
                   const active = boardType === t.value;
                   return (
                     <button
                       key={t.value}
-                      className={board_type_btn}
+                      className={`board-type-btn${active ? ' board-type-btn--active' : ''}`}
                       onClick={() => setBoardType(t.value)}
                     >
                       <span className="board-type-btn__icon">{BOARD_TYPE_ICONS[t.value]}</span>
                       <div className="board-type-btn__text">
-                        <div className={oard-type-btn__name}>
+                        <div className="board-type-btn__name">
                           {t.label}
                         </div>
                         <div className="board-type-btn__desc">
@@ -176,7 +175,7 @@ export function HomePanel({ id }: Props) {
                 disabled={!title.trim() || creating}
                 loading={creating}
               >
-                ������� �����
+                Создать доску
               </Button>
             </FormItem>
           </Box>

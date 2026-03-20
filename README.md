@@ -244,7 +244,7 @@ bridge.send("VKWebAppGetLaunchParams"); // vk_sign для верификации
 Два файла в `.github/workflows/`:
 
 - **`deploy-production.yml`** — срабатывает на push в `main`: TypeScript-проверка.
-- **`deploy-staging.yml`** — срабатывает на push в `dev`: TypeScript-проверка.
+- **`deploy-staging.yml`** — срабатывает на push в `dev`: проверяет, что фронтенд и бэкенд собираются без линтеров; предупреждения не блокируют деплой.
 
 Миграции схемы БД выполняет Railway сам при старте контейнера через `entrypoint.prod.sh` (`prisma migrate deploy`). Neon GitHub App (`NEON_API_KEY`, `NEON_PROJECT_ID`) управляет ветками базы данных для PR — создаёт ветку при открытии PR и удаляет при закрытии.
 
