@@ -10,12 +10,13 @@ import {
   Header,
   Cell,
   Avatar,
-  Select,
+  CustomSelect,
   Button,
   Div,
   Search,
   ModalRoot,
   ModalPage,
+  ModalPageContent,
   ModalPageHeader,
   PanelHeaderClose,
   Checkbox,
@@ -300,7 +301,7 @@ export function BoardAccessPanel({ id }: Props) {
               before={<Avatar size={40}>{String(m.userId).slice(-2)}</Avatar>}
               subtitle={
                 canChangeRole ? (
-                  <Select
+                  <CustomSelect
                     value={m.role}
                     onChange={(e) => handleRoleChange(m.userId, e.target.value)}
                     options={ASSIGNABLE_ROLES}
@@ -332,7 +333,7 @@ export function BoardAccessPanel({ id }: Props) {
       {isAdmin && (
         <Group header={<Header size="s">Пригласить</Header>}>
           <Div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <Select
+            <CustomSelect
               value={inviteRole}
               onChange={(e) => setInviteRole(e.target.value)}
               options={ASSIGNABLE_ROLES}
@@ -353,6 +354,7 @@ export function BoardAccessPanel({ id }: Props) {
       <ModalRoot activeModal={activeModal} onClose={() => setActiveModal(null)}>
         <ModalPage
           id={MODAL_PICKER}
+          dynamicContentHeight
           hideCloseButton
           header={
             <ModalPageHeader
@@ -379,7 +381,8 @@ export function BoardAccessPanel({ id }: Props) {
             ) : null
           }
         >
-          {loadingCandidates ? (
+          <ModalPageContent>
+            {loadingCandidates ? (
             <Div style={{ display: 'flex', justifyContent: 'center', padding: 32 }}>
               <Spinner size="l" />
             </Div>
@@ -422,6 +425,7 @@ export function BoardAccessPanel({ id }: Props) {
               )}
             </>
           )}
+          </ModalPageContent>
         </ModalPage>
       </ModalRoot>
 

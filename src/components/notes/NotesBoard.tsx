@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Spinner } from '@vkontakte/vkui';
 import { Icon16MenuOutline } from '@vkontakte/icons';
+import { ErrorPlaceholder } from '../common/ErrorPlaceholder';
 import { useNotes } from '../../hooks/useNotes';
 import { NoteSidebar } from './NoteSidebar';
 import { NoteEditor } from './NoteEditor';
@@ -61,8 +62,8 @@ export function NotesBoard({ boardId, canEdit, onSnackbar }: NotesBoardProps) {
 
   if (error) {
     return (
-      <div className="notes-board notes-board--error">
-        <p>{error}</p>
+      <div className="notes-board">
+        <ErrorPlaceholder message={error} />
       </div>
     );
   }

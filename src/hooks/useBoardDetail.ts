@@ -12,6 +12,7 @@ export function useBoardDetail(boardId: string) {
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    if (!boardId) return;
     const hit = cacheGet<Board>(cacheKey);
     if (hit) {
       setBoard(hit);

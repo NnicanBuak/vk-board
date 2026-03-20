@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Panel,
   PanelHeader,
@@ -11,15 +11,26 @@ import {
   Box,
   ModalRoot,
   ModalPage,
+  ModalPageContent,
   ModalPageHeader,
   FormItem,
   Input,
   Textarea,
   Button,
   Alert,
+  ActionSheet,
+  ActionSheetItem,
 } from '@vkontakte/vkui';
-import { Icon24LinkedOutline, Icon16PenOutline, Icon24UsersOutline } from '@vkontakte/icons';
-import { useRouteNavigator, useParams } from '@vkontakte/vk-mini-apps-router';
+import {
+  Icon24LinkedOutline,
+  Icon24UsersOutline,
+  Icon24MoreHorizontal,
+} from '@vkontakte/icons';
+import { useRouteNavigator, useParams, useActiveVkuiLocation } from '@vkontakte/vk-mini-apps-router';
+import { useFab } from '../store/FabContext';
+import { isDraggingRef } from '../store/dragRef';
+import { PANELS } from '../router/routes';
+import bridge from '@vkontakte/vk-bridge';
 
 import { useBoardDetail } from '../hooks/useBoardDetail';
 import { useCards } from '../hooks/useCards';
@@ -40,20 +51,29 @@ import type { Card, Tag } from '../types/card';
 const AVATAR_COLORS = ['#e53935', '#8e24aa', '#1e88e5', '#00897b', '#f4511e', '#33b679', '#fb8c00', '#6d4c41'];
 function memberColor(userId: number) { return AVATAR_COLORS[userId % AVATAR_COLORS.length]; }
 
-const MODAL_EDIT_BOARD = 'edit_board';
+const MODAL_RENAME = 'board_rename';
+const MODAL_DESC   = 'board_desc';
+const MODAL_COVER  = 'board_cover';
 
 const BOARD_TYPE_LABELS: Record<string, string> = {
-  kanban:    'Kanban',
+  kanban:    'Канбан',
   brainstorm:'Брейншторм',
   notes:     'Заметки',
 };
+
+const VK_APP_ID = Number(import.meta.env.VITE_VK_APP_ID ?? 0);
 
 interface Props { id: string }
 
 export function BoardPanel({ id }: Props) {
   const navigator = useRouteNavigator();
+  const { panel } = useActiveVkuiLocation();
+  const { showFab, hideFab } = useFab();
   const params = useParams<'boardId'>();
-  const boardId = params?.boardId ?? '';
+  const rawBoardId = params?.boardId ?? '';
+  const boardIdRef = useRef(rawBoardId);
+  if (rawBoardId) boardIdRef.current = rawBoardId;
+  const boardId = boardIdRef.current;
 
   useEffect(() => { if (boardId) trackBoardVisit(boardId); }, [boardId]);
 
@@ -61,17 +81,26 @@ export function BoardPanel({ id }: Props) {
   const userId = user?.userId ?? 0;
 
   const [activeModal, setActiveModal] = useState<string | null>(null);
+  const [showActionSheet, setShowActionSheet] = useState(false);
+  const fabActionRef = useRef<(() => void) | null>(null);
   const [selectedCard, setSelectedCard] = useState<Card | null>(null);
   const [snackbar, setSnackbar] = useState<string | null>(null);
+
+  // Mini-modal state
   const [editTitle, setEditTitle] = useState('');
   const [editDesc, setEditDesc] = useState('');
-  const [editCover, setEditCover] = useState('');
-  const [savingBoard, setSavingBoard] = useState(false);
+  const [coverPreview, setCoverPreview] = useState('');
+  const [coverUrl, setCoverUrl] = useState('');
+  const [uploadingCover, setUploadingCover] = useState(false);
+  const [saving, setSaving] = useState(false);
+
   const [showDeleteAlert, setShowDeleteAlert] = useState(false);
   const [boardTags, setBoardTags] = useState<Tag[]>([]);
   const [boardMembers, setBoardMembers] = useState<{ userId: number; role: string }[]>([]);
   const [viewersOpen, setViewersOpen] = useState(false);
   const viewersBtnRef = useRef<HTMLDivElement>(null);
+  const coverFileRef = useRef<HTMLInputElement>(null);
+  const actionSheetRef = useRef<HTMLElement>(null);
 
   const { board, loading: boardLoading, error: boardError, refresh: refreshBoard, updateBoard } = useBoardDetail(boardId);
   const { cards, loading: cardsLoading, error: cardsError, refresh: refreshCards, addCard, updateCard, removeCard, toggleLike } = useCards(boardId, 'date');
@@ -114,17 +143,7 @@ export function BoardPanel({ id }: Props) {
     const link = buildShareLink(boardId);
     try {
       await window.navigator.clipboard.writeText(link);
-    } catch {
-      try {
-        const ta = document.createElement('textarea');
-        ta.value = link;
-        ta.style.cssText = 'position:fixed;opacity:0';
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand('copy');
-        document.body.removeChild(ta);
-      } catch { /* silent */ }
-    }
+    } catch { /* silent — clipboard API unavailable */ }
     setSnackbar('Ссылка скопирована');
   };
 
@@ -134,26 +153,6 @@ export function BoardPanel({ id }: Props) {
       navigator.back();
     } catch (e) {
       setSnackbar((e as Error).message);
-    }
-  };
-
-  const openEditBoard = () => {
-    setEditTitle(board?.title ?? '');
-    setEditDesc(board?.description ?? '');
-    setEditCover(board?.coverImage ?? '');
-    setActiveModal(MODAL_EDIT_BOARD);
-  };
-
-  const handleSaveBoard = async () => {
-    if (!editTitle.trim()) return;
-    setSavingBoard(true);
-    try {
-      await updateBoard({ title: editTitle.trim(), description: editDesc.trim() || undefined, coverImage: editCover.trim() || undefined });
-      setActiveModal(null);
-    } catch (e) {
-      setSnackbar((e as Error).message);
-    } finally {
-      setSavingBoard(false);
     }
   };
 
@@ -193,7 +192,103 @@ export function BoardPanel({ id }: Props) {
     refreshCards();
   };
 
+  // ── Cover upload helpers ──
+  const handleCoverFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingCover(true);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await fetch('/api/upload', { method: 'POST', body: form });
+      if (!res.ok) throw new Error('Ошибка загрузки');
+      const { url } = await res.json() as { url: string };
+      setCoverUrl(url);
+      setCoverPreview(url);
+    } catch (err) {
+      setSnackbar((err as Error).message);
+    } finally {
+      setUploadingCover(false);
+      if (coverFileRef.current) coverFileRef.current.value = '';
+    }
+  };
+
+  const handleVKGallery = async () => {
+    try {
+      const auth = await bridge.send('VKWebAppGetAuthToken', { app_id: VK_APP_ID, scope: 'photos' });
+      const res = await bridge.send('VKWebAppCallAPIMethod', {
+        method: 'photos.getAll',
+        params: { count: 1, access_token: auth.access_token, v: '5.131' },
+      });
+      const items = (res.response as { items?: { sizes?: { url: string; width: number }[] }[] })?.items ?? [];
+      if (!items.length) { setSnackbar('Нет фото в галерее'); return; }
+      const sizes = items[0].sizes ?? [];
+      const largest = [...sizes].sort((a, b) => b.width - a.width)[0];
+      if (largest?.url) { setCoverUrl(largest.url); setCoverPreview(largest.url); }
+    } catch {
+      setSnackbar('Не удалось открыть галерею VK');
+    }
+  };
+
+  // ── ActionSheet handlers ──
+  const openRename = () => {
+    setEditTitle(board?.title ?? '');
+    setActiveModal(MODAL_RENAME);
+  };
+
+  const openDesc = () => {
+    setEditDesc(board?.description ?? '');
+    setActiveModal(MODAL_DESC);
+  };
+
+  const openCover = () => {
+    setCoverUrl(board?.coverImage ?? '');
+    setCoverPreview(board?.coverImage ?? '');
+    setActiveModal(MODAL_COVER);
+  };
+
+  const handleSaveTitle = async () => {
+    if (!editTitle.trim()) return;
+    setSaving(true);
+    try {
+      await updateBoard({ title: editTitle.trim() });
+      setActiveModal(null);
+    } catch (e) { setSnackbar((e as Error).message); }
+    finally { setSaving(false); }
+  };
+
+  const handleSaveDesc = async () => {
+    setSaving(true);
+    try {
+      await updateBoard({ description: editDesc.trim() || undefined });
+      setActiveModal(null);
+    } catch (e) { setSnackbar((e as Error).message); }
+    finally { setSaving(false); }
+  };
+
+  const handleSaveCover = async () => {
+    setSaving(true);
+    try {
+      await updateBoard({ coverImage: coverUrl || undefined });
+      setActiveModal(null);
+    } catch (e) { setSnackbar((e as Error).message); }
+    finally { setSaving(false); }
+  };
+
+
   const boardType = board?.boardType ?? 'kanban';
+  useEffect(() => {
+    const active = panel === PANELS.BOARD && canEdit && boardType !== 'notes';
+    if (!active) {
+      hideFab();
+      return;
+    }
+    showFab(() => fabActionRef.current?.());
+  }, [panel, canEdit, boardType, showFab, hideFab]);
+
+  const registerFabAction = useCallback((handler: (() => void) | null) => {
+    fabActionRef.current = handler;
+  }, []);
 
   return (
     <Panel id={id}>
@@ -240,6 +335,15 @@ export function BoardPanel({ id }: Props) {
             <PanelHeaderButton onClick={handleCopyLink} aria-label="Скопировать ссылку">
               <Icon24LinkedOutline />
             </PanelHeaderButton>
+            {isAdmin && (
+              <PanelHeaderButton
+                getRootRef={actionSheetRef}
+                onClick={() => setShowActionSheet(true)}
+                aria-label="Действия с доской"
+              >
+                <Icon24MoreHorizontal />
+              </PanelHeaderButton>
+            )}
           </div>
         }
       >
@@ -247,22 +351,15 @@ export function BoardPanel({ id }: Props) {
       </PanelHeader>
 
       <PullToRefresh
-        onRefresh={() => { refreshBoard(); refreshCards(); refreshColumns(); }}
+        onRefresh={() => { if (!isDraggingRef.current) { refreshBoard(); refreshCards(); refreshColumns(); } }}
         isFetching={loading}
       >
         {error ? (
           <ErrorPlaceholder message={error} onRetry={() => { refreshBoard(); refreshCards(); }} />
         ) : (
           <div className="page-inner">
-            {/* Board title */}
-            {isAdmin ? (
-              <button className="board-page-title board-page-title--editable" onClick={openEditBoard}>
-                {board?.title ?? ''}
-                <Icon16PenOutline className="board-page-title__icon" />
-              </button>
-            ) : (
-              <h2 className="board-page-title">{board?.title ?? ''}</h2>
-            )}
+            {/* Board title + description */}
+            <h2 className="board-page-title">{board?.title ?? ''}</h2>
             {board?.description && <p className="board-page-desc">{board.description}</p>}
 
             {loading ? (
@@ -283,6 +380,8 @@ export function BoardPanel({ id }: Props) {
                 toggleLike={toggleLike}
                 onCardClick={setSelectedCard}
                 onSnackbar={setSnackbar}
+                onDraggingChange={(v) => { isDraggingRef.current = v; }}
+                registerFabAction={registerFabAction}
               />
             ) : boardType === 'brainstorm' ? (
               <BrainstormBoard
@@ -293,6 +392,7 @@ export function BoardPanel({ id }: Props) {
                 toggleLike={toggleLike}
                 onCardClick={setSelectedCard}
                 onSnackbar={setSnackbar}
+                registerFabAction={registerFabAction}
               />
             ) : (
               <NotesBoard
@@ -305,77 +405,166 @@ export function BoardPanel({ id }: Props) {
         )}
       </PullToRefresh>
 
-      {/* Edit board modal */}
+      {/* ActionSheet: board settings */}
+      {showActionSheet && (
+        <ActionSheet toggleRef={actionSheetRef} onClose={() => setShowActionSheet(false)}>
+          <ActionSheetItem onClick={() => { setShowActionSheet(false); openRename(); }}>
+            Переименовать
+          </ActionSheetItem>
+          <ActionSheetItem onClick={() => { setShowActionSheet(false); openDesc(); }}>
+            Изменить описание
+          </ActionSheetItem>
+          <ActionSheetItem onClick={() => { setShowActionSheet(false); openCover(); }}>
+            Изменить обложку
+          </ActionSheetItem>
+          <ActionSheetItem onClick={() => { setShowActionSheet(false); navigator.push(`/board/${boardId}/access`); }}>
+            Настройки доступа
+          </ActionSheetItem>
+          <ActionSheetItem mode="destructive" onClick={() => { setShowActionSheet(false); setShowDeleteAlert(true); }}>
+            Удалить доску
+          </ActionSheetItem>
+        </ActionSheet>
+      )}
+
+      {/* Mini modals */}
       <ModalRoot activeModal={activeModal} onClose={() => setActiveModal(null)}>
+        {/* Rename */}
         <ModalPage
-          id={MODAL_EDIT_BOARD}
+          id={MODAL_RENAME}
+          dynamicContentHeight
           hideCloseButton
           header={
             <ModalPageHeader after={<PanelHeaderClose onClick={() => setActiveModal(null)} />}>
-              Редактировать доску
+              Название доски
             </ModalPageHeader>
           }
         >
-          <Box>
-            <FormItem top="Название *">
-              <Input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} maxLength={100} />
-            </FormItem>
-            <FormItem top="Описание">
-              <Textarea
-                value={editDesc}
-                onChange={(e) => setEditDesc(e.target.value)}
-                placeholder="Необязательно"
-                maxLength={300}
-                rows={3}
-              />
-            </FormItem>
-            <FormItem top="Обложка (URL)">
-              <Input
-                value={editCover}
-                onChange={(e) => setEditCover(e.target.value)}
-                placeholder="https://example.com/image.jpg"
-              />
-              {editCover.trim() && (
-                <img
-                  src={`/api/images?url=${encodeURIComponent(editCover.trim())}`}
-                  alt="preview"
-                  style={{ marginTop: 8, width: '100%', maxHeight: 120, objectFit: 'cover', borderRadius: 8 }}
-                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+          <ModalPageContent>
+            <Box>
+              <FormItem top="Название *">
+                <Input
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  maxLength={100}
+                  autoFocus
+                  onKeyDown={(e) => e.key === 'Enter' && handleSaveTitle()}
                 />
-              )}
-            </FormItem>
-            <FormItem>
-              <Button size="l" stretched onClick={handleSaveBoard} disabled={!editTitle.trim() || savingBoard} loading={savingBoard}>
-                Сохранить
-              </Button>
-            </FormItem>
-            <FormItem>
-              <Button
-                size="l"
-                stretched
-                appearance="negative"
-                mode="outline"
-                onClick={() => { setActiveModal(null); setShowDeleteAlert(true); }}
-              >
-                Удалить доску
-              </Button>
-            </FormItem>
-          </Box>
+              </FormItem>
+              <FormItem>
+                <Button size="l" stretched onClick={handleSaveTitle} disabled={!editTitle.trim() || saving} loading={saving}>
+                  Сохранить
+                </Button>
+              </FormItem>
+            </Box>
+          </ModalPageContent>
+        </ModalPage>
+
+        {/* Description */}
+        <ModalPage
+          id={MODAL_DESC}
+          dynamicContentHeight
+          hideCloseButton
+          header={
+            <ModalPageHeader after={<PanelHeaderClose onClick={() => setActiveModal(null)} />}>
+              Описание доски
+            </ModalPageHeader>
+          }
+        >
+          <ModalPageContent>
+            <Box>
+              <FormItem top="Описание">
+                <Textarea
+                  value={editDesc}
+                  onChange={(e) => setEditDesc(e.target.value)}
+                  placeholder="Необязательно"
+                  maxLength={300}
+                  rows={4}
+                  autoFocus
+                />
+              </FormItem>
+              <FormItem>
+                <Button size="l" stretched onClick={handleSaveDesc} disabled={saving} loading={saving}>
+                  Сохранить
+                </Button>
+              </FormItem>
+            </Box>
+          </ModalPageContent>
+        </ModalPage>
+
+        {/* Cover */}
+        <ModalPage
+          id={MODAL_COVER}
+          dynamicContentHeight
+          hideCloseButton
+          header={
+            <ModalPageHeader after={<PanelHeaderClose onClick={() => setActiveModal(null)} />}>
+              Обложка доски
+            </ModalPageHeader>
+          }
+        >
+          <ModalPageContent>
+            <Box>
+              <FormItem>
+                <input
+                  ref={coverFileRef}
+                  type="file"
+                  accept="image/*"
+                  style={{ display: 'none' }}
+                  onChange={handleCoverFile}
+                />
+                {coverPreview && (
+                  <img
+                    src={coverPreview}
+                    alt="preview"
+                    style={{ width: '100%', maxHeight: 160, objectFit: 'cover', borderRadius: 8, marginBottom: 8 }}
+                  />
+                )}
+                <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                  <Button
+                    size="m"
+                    mode="secondary"
+                    stretched
+                    loading={uploadingCover}
+                    disabled={uploadingCover}
+                    onClick={() => coverFileRef.current?.click()}
+                  >
+                    С устройства
+                  </Button>
+                  <Button
+                    size="m"
+                    mode="secondary"
+                    stretched
+                    onClick={handleVKGallery}
+                  >
+                    Из VK Фото
+                  </Button>
+                </div>
+                {coverPreview && (
+                  <Button
+                    size="m"
+                    appearance="negative"
+                    mode="outline"
+                    stretched
+                    style={{ marginBottom: 8 }}
+                    onClick={() => { setCoverUrl(''); setCoverPreview(''); }}
+                  >
+                    Убрать обложку
+                  </Button>
+                )}
+                <Button size="l" stretched onClick={handleSaveCover} disabled={saving} loading={saving}>
+                  Сохранить
+                </Button>
+              </FormItem>
+            </Box>
+          </ModalPageContent>
         </ModalPage>
       </ModalRoot>
 
       {showDeleteAlert && (
         <Alert
           actions={[
-            {
-              title: 'Удалить',
-              mode: 'destructive',
-              action: handleDeleteBoard,
-            },
-            {
-              title: 'Отмена',
-              mode: 'cancel',
-            },
+            { title: 'Удалить', mode: 'destructive', action: handleDeleteBoard },
+            { title: 'Отмена', mode: 'cancel' },
           ]}
           actionsLayout="horizontal"
           onClose={() => setShowDeleteAlert(false)}

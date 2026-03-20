@@ -23,6 +23,7 @@ export function useCards(boardId: string, sort: SortMode) {
   const [state, setState] = useState<State>({ cards: [], loading: true, error: null });
 
   const load = useCallback(async () => {
+    if (!boardId) return;
     setState((s) => ({ ...s, loading: true, error: null }));
     try {
       const cards = (await cardsApi.list(boardId, sort)).map(normalizeCard);

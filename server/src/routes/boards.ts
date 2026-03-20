@@ -51,7 +51,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
   res.json(boards);
 });
 
-const VALID_BOARD_TYPES = ['voting', 'kanban', 'brainstorm', 'retro'];
+const VALID_BOARD_TYPES = ['kanban', 'brainstorm', 'notes'];
 
 // POST /api/boards — create board, assign creator as admin
 router.post('/', async (req: Request, res: Response): Promise<void> => {
@@ -69,7 +69,7 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
     return;
   }
 
-  const resolvedType = VALID_BOARD_TYPES.includes(boardType ?? '') ? (boardType as any) : 'voting';
+  const resolvedType = VALID_BOARD_TYPES.includes(boardType ?? '') ? (boardType as any) : 'kanban';
 
   const board = await prisma.board.create({
     data: {

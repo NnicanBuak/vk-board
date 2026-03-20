@@ -1,14 +1,15 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
-  Box,
   ModalRoot,
   ModalPage,
+  ModalPageContent,
   ModalPageHeader,
-  FixedLayout,
   Button,
-  SegmentedControl,
+  ActionSheet,
+  ActionSheetItem,
+  Separator,
 } from '@vkontakte/vkui';
-import { Icon28AddOutline, Icon16Like, Icon16LikeOutline } from '@vkontakte/icons';
+import { Icon16Like, Icon16LikeOutline, Icon16SortArrowUp, Icon16SortArrowDown, Icon16ClockOutline } from '@vkontakte/icons';
 import { CardForm } from '../card/CardForm';
 import type { Card } from '../../types/card';
 
@@ -81,20 +82,56 @@ interface BrainstormBoardProps {
   toggleLike: (cardId: string, userId: number) => void;
   onCardClick: (card: Card) => void;
   onSnackbar: (msg: string) => void;
+  registerFabAction?: (handler: (() => void) | null) => void;
 }
 
 export function BrainstormBoard({
   cards, canEdit, userId,
-  addCard, toggleLike, onCardClick, onSnackbar,
+  addCard, toggleLike, onCardClick, onSnackbar, registerFabAction,
 }: BrainstormBoardProps) {
   const [activeModal, setActiveModal] = useState<string | null>(null);
+
   const [sort, setSort] = useState<'likes' | 'date'>('likes');
 
-  const sorted = [...cards].sort((a, b) =>
-    sort === 'likes'
-      ? b.likeCount - a.likeCount || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-  );
+  useEffect(() => {
+    if (!canEdit || !registerFabAction) return undefined;
+    registerFabAction(() => setActiveModal(MODAL_CARD));
+    return () => registerFabAction(null);
+  }, [canEdit, registerFabAction]);
+  const [direction, setDirection] = useState<'desc' | 'asc'>('desc');
+  const [showSortSheet, setShowSortSheet] = useState(false);
+  const sortBtnRef = useRef<HTMLButtonElement>(null);
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const sorted = [...cards].sort((a, b) => {
+    const mul = direction === 'desc' ? 1 : -1;
+    if (sort === 'likes') {
+      return mul * (b.likeCount - a.likeCount || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }
+    return mul * (new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  });
+
+  const handleSortPointerDown = () => {
+    longPressTimer.current = setTimeout(() => {
+      longPressTimer.current = null;
+      setShowSortSheet(true);
+    }, 400);
+  };
+
+  const handleSortPointerUp = () => {
+    if (longPressTimer.current !== null) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+      setDirection(d => d === 'desc' ? 'asc' : 'desc');
+    }
+  };
+
+  const handleSortPointerLeave = () => {
+    if (longPressTimer.current !== null) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
 
   const handleCardSave = async (data: { title: string; description?: string; url?: string }) => {
     try {
@@ -108,16 +145,19 @@ export function BrainstormBoard({
   return (
     <>
       <div className="brainstorm">
-        <div className="brainstorm__sort">
-          <SegmentedControl
-            size="m"
-            value={sort}
-            onChange={(v) => setSort(v as 'likes' | 'date')}
-            options={[
-              { label: '❤ По голосам', value: 'likes' },
-              { label: '🕐 По дате', value: 'date' },
-            ]}
-          />
+        <div className="brainstorm__header">
+          <button
+            ref={sortBtnRef}
+            className="brainstorm__sort-btn"
+            onPointerDown={handleSortPointerDown}
+            onPointerUp={handleSortPointerUp}
+            onPointerLeave={handleSortPointerLeave}
+            onContextMenu={(e) => e.preventDefault()}
+            aria-label="Сортировка"
+          >
+            {direction === 'desc' ? <Icon16SortArrowDown /> : <Icon16SortArrowUp />}
+            {sort === 'likes' ? 'По лайкам' : 'По дате'}
+          </button>
         </div>
 
         {sorted.length === 0 ? (
@@ -146,28 +186,38 @@ export function BrainstormBoard({
         <div style={{ height: 88 }} />
       </div>
 
-      {canEdit && (
-        <FixedLayout vertical="bottom">
-          <div className="page-inner">
-            <Box style={{ display: 'flex', justifyContent: 'flex-end', paddingRight: 16, paddingBottom: 'max(20px, env(safe-area-inset-bottom))' }}>
-              <button className="fab" onClick={() => setActiveModal(MODAL_CARD)} aria-label="Добавить идею">
-                <Icon28AddOutline />
-              </button>
-            </Box>
-          </div>
-        </FixedLayout>
+
+      {showSortSheet && (
+        <ActionSheet onClose={() => setShowSortSheet(false)} toggleRef={sortBtnRef}>
+          <ActionSheetItem
+            before={<Icon16Like />}
+            onClick={() => { setSort('likes'); setShowSortSheet(false); }}
+          >
+            По лайкам
+          </ActionSheetItem>
+          <Separator />
+          <ActionSheetItem
+            before={<Icon16ClockOutline />}
+            onClick={() => { setSort('date'); setShowSortSheet(false); }}
+          >
+            По дате
+          </ActionSheetItem>
+        </ActionSheet>
       )}
 
       <ModalRoot activeModal={activeModal} onClose={() => setActiveModal(null)}>
         <ModalPage
           id={MODAL_CARD}
+          dynamicContentHeight
           hideCloseButton
           header={<ModalPageHeader>Новая идея</ModalPageHeader>}
         >
-          <CardForm
-            onSave={handleCardSave}
-            onCancel={() => setActiveModal(null)}
-          />
+          <ModalPageContent>
+            <CardForm
+              onSave={handleCardSave}
+              onCancel={() => setActiveModal(null)}
+            />
+          </ModalPageContent>
         </ModalPage>
       </ModalRoot>
     </>
