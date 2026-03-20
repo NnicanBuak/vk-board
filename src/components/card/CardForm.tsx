@@ -14,7 +14,7 @@ interface Props {
   onCancel: () => void;
 }
 
-export function CardForm({ initial, onSave, onCancel: _onCancel }: Props) {
+export function CardForm({ initial, onSave, onCancel }: Props) {
   const [title, setTitle] = useState(initial?.title ?? '');
   const [description, setDescription] = useState(initial?.description ?? '');
   const [url, setUrl] = useState(initial?.url ?? '');
@@ -79,6 +79,17 @@ export function CardForm({ initial, onSave, onCancel: _onCancel }: Props) {
           loading={saving}
         >
           Сохранить
+        </Button>
+      </FormItem>
+      <FormItem>
+        <Button
+          size="l"
+          mode="secondary"
+          stretched
+          onClick={onCancel}
+          disabled={saving}
+        >
+          Отмена
         </Button>
       </FormItem>
     </Box>

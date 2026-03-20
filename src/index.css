@@ -1230,11 +1230,28 @@ body {
   --vkui--size_popup_small--regular: min(768px, 100%) !important;
 }
 
-/* Modal side padding via padding-inline — host dimensions stay unchanged (inset-inline: 0),
-   so the transform animation stays on the compositor without triggering layout recalc */
+/* Mirror ActionSheet host spacing so ModalPage keeps the same horizontal inset everywhere */
 .vkuiModalPage__hostMobile {
-  padding-inline: 16px !important;
+  padding-inline: 10px !important;
   box-sizing: border-box !important;
+}
+
+.vkuiModalPage__hostDesktop {
+  padding-inline: 10px !important;
+}
+
+/* ── ActionSheet separators ── */
+.vkuiActionSheet__contentWrapper
+  .vkuiActionSheetItem__host:not(.vkuiActionSheetItem__ios):not(.vkuiActionSheetItem__modeCancel)
+  + .vkuiActionSheetItem__host:not(.vkuiActionSheetItem__ios):not(.vkuiActionSheetItem__modeCancel)::before {
+  content: '';
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  top: 0;
+  height: 1px;
+  background: var(--vkui--color_background_secondary);
+  pointer-events: none;
 }
 
 /* ── HomePanel: hero content layout ── */

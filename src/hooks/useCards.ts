@@ -33,7 +33,10 @@ export function useCards(boardId: string, sort: SortMode) {
     }
   }, [boardId, sort]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const timeout = window.setTimeout(() => { void load(); }, 0);
+    return () => window.clearTimeout(timeout);
+  }, [load]);
 
   const addCard = useCallback(
     async (data: { title: string; description?: string; url?: string; columnId?: string | null }) => {

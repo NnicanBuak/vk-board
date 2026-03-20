@@ -1,5 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
-import bridge from '@vkontakte/vk-bridge';
+import { useState, useEffect } from "react";
 import {
   Panel,
   Button,
@@ -17,32 +16,52 @@ import {
   PanelHeaderClose,
   Tabs,
   TabsItem,
-} from '@vkontakte/vkui';
-import { useRouteNavigator, useActiveVkuiLocation } from '@vkontakte/vk-mini-apps-router';
-import { Icon24Squareshape3VerticalOutline, Icon24BrainOutline, Icon24DocumentListOutline, Icon24Cancel } from '@vkontakte/icons';
-import { useFab } from '../store/FabContext';
-import { PANELS } from '../router/routes';
+  usePlatform,
+} from "@vkontakte/vkui";
+import {
+  useRouteNavigator,
+  useActiveVkuiLocation,
+} from "@vkontakte/vk-mini-apps-router";
+import {
+  Icon24Squareshape3VerticalOutline,
+  Icon24BrainOutline,
+  Icon24DocumentListOutline,
+} from "@vkontakte/icons";
+import { useFab } from "../store/fabState";
+import { PANELS } from "../router/routes";
 
-import { useBoards } from '../hooks/useBoards';
-import { BoardListItem } from '../components/board/BoardListItem';
-import { EmptyState } from '../components/common/EmptyState';
-import { ErrorPlaceholder } from '../components/common/ErrorPlaceholder';
-import { getRecentBoardIds } from '../utils/recentBoards';
-import type { Board, BoardType } from '../types/board';
+import { useBoards } from "../hooks/useBoards";
+import { BoardListItem } from "../components/board/BoardListItem";
+import { EmptyState } from "../components/common/EmptyState";
+import { ErrorPlaceholder } from "../components/common/ErrorPlaceholder";
+import { getRecentBoardIds } from "../utils/recentBoards";
+import type { Board, BoardType } from "../types/board";
 
 const BOARD_TYPES: { value: BoardType; label: string; desc: string }[] = [
-  { value: 'kanban',    label: 'Канбан',      desc: 'Колонки и задачи с исполнителями и дедлайнами' },
-  { value: 'brainstorm',label: 'Брейншторм',  desc: 'Сетка идей с голосованием, без колонок' },
-  { value: 'notes',     label: 'Заметки',     desc: 'Страницы с форматированным текстом, как в Notion' },
+  {
+    value: "kanban",
+    label: "Канбан",
+    desc: "Колонки и задачи с исполнителями и дедлайнами",
+  },
+  {
+    value: "brainstorm",
+    label: "Брейншторм",
+    desc: "Сетка идей с голосованием, без колонок",
+  },
+  {
+    value: "notes",
+    label: "Заметки",
+    desc: "Страницы с форматированным текстом, как в Notion",
+  },
 ];
 
 const BOARD_TYPE_ICONS: Record<BoardType, React.ReactNode> = {
-  kanban:    <Icon24Squareshape3VerticalOutline />,
-  brainstorm:<Icon24BrainOutline />,
-  notes:     <Icon24DocumentListOutline />,
+  kanban: <Icon24Squareshape3VerticalOutline />,
+  brainstorm: <Icon24BrainOutline />,
+  notes: <Icon24DocumentListOutline />,
 };
 
-const MODAL_CREATE = 'create_board';
+const MODAL_CREATE = "create_board";
 
 interface Props {
   id: string;
@@ -53,30 +72,33 @@ export function HomePanel({ id }: Props) {
   const { panel } = useActiveVkuiLocation();
   const { showFab, hideFab } = useFab();
   const { boards, loading, error, refresh, createBoard } = useBoards();
+  const platform = usePlatform();
 
-  const [activeTab, setActiveTab] = useState<'recent' | 'mine'>('recent');
+  const [activeTab, setActiveTab] = useState<"recent" | "mine">("recent");
   const [activeModal, setActiveModal] = useState<string | null>(null);
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [coverImage, setCoverImage] = useState('');
-  const [boardType, setBoardType] = useState<BoardType>('kanban');
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [coverImage, setCoverImage] = useState("");
+  const [boardType, setBoardType] = useState<BoardType>("kanban");
   const [creating, setCreating] = useState(false);
   const [snackbar, setSnackbar] = useState<string | null>(null);
 
   const openCreate = () => {
-    setTitle('Новая доска');
-    setDescription('');
-    setCoverImage('');
-    setBoardType('kanban');
+    setTitle("Новая доска");
+    setDescription("");
+    setCoverImage("");
+    setBoardType("kanban");
     setActiveModal(MODAL_CREATE);
   };
 
   useEffect(() => {
     if (panel !== PANELS.HOME) return;
-    if (activeModal) { hideFab(); return; }
+    if (activeModal) {
+      hideFab();
+      return;
+    }
     showFab(openCreate);
-  // openCreate is recreated on every render — intentional, FAB always gets fresh handler
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // openCreate is recreated on every render — intentional, FAB always gets fresh handler
   }, [panel, activeModal, showFab, hideFab]);
 
   const handleCreate = async () => {
@@ -100,7 +122,7 @@ export function HomePanel({ id }: Props) {
 
   const openBoard = (boardId: string) => navigator.push(`/board/${boardId}`);
 
-  const myBoards = boards.filter((b) => b.myRole === 'admin');
+  const myBoards = boards.filter((b) => b.myRole === "admin");
 
   const recentIds = getRecentBoardIds();
   const recentBoards = recentIds
@@ -109,7 +131,7 @@ export function HomePanel({ id }: Props) {
   const unseenBoards = boards.filter((b) => !recentIds.includes(b.id));
   const allRecentBoards = [...recentBoards, ...unseenBoards];
 
-  const tabBoards = activeTab === 'mine' ? myBoards : allRecentBoards;
+  const tabBoards = activeTab === "mine" ? myBoards : allRecentBoards;
 
   const newBoardModal = (
     <ModalRoot activeModal={activeModal} onClose={() => setActiveModal(null)}>
@@ -117,7 +139,10 @@ export function HomePanel({ id }: Props) {
         id={MODAL_CREATE}
         dynamicContentHeight
         header={
-          <ModalPageHeader after={<PanelHeaderClose onClick={() => setActiveModal(null)} />}>
+          <ModalPageHeader
+            before={platform !== "ios" && <PanelHeaderClose onClick={() => setActiveModal(null)} />}
+            after={platform === "ios" && <PanelHeaderClose onClick={() => setActiveModal(null)} />}
+          >
             Новая доска
           </ModalPageHeader>
         }
@@ -150,17 +175,15 @@ export function HomePanel({ id }: Props) {
                   return (
                     <button
                       key={t.value}
-                      className={`board-type-btn${active ? ' board-type-btn--active' : ''}`}
+                      className={`board-type-btn${active ? " board-type-btn--active" : ""}`}
                       onClick={() => setBoardType(t.value)}
                     >
-                      <span className="board-type-btn__icon">{BOARD_TYPE_ICONS[t.value]}</span>
+                      <span className="board-type-btn__icon">
+                        {BOARD_TYPE_ICONS[t.value]}
+                      </span>
                       <div className="board-type-btn__text">
-                        <div className="board-type-btn__name">
-                          {t.label}
-                        </div>
-                        <div className="board-type-btn__desc">
-                          {t.desc}
-                        </div>
+                        <div className="board-type-btn__name">{t.label}</div>
+                        <div className="board-type-btn__desc">{t.desc}</div>
                       </div>
                     </button>
                   );
@@ -197,7 +220,8 @@ export function HomePanel({ id }: Props) {
           <div className="page-inner hero-bg__content">
             <h1 className="hero__title">Совместные доски</h1>
             <p className="hero__subtitle">
-              Коллаборируйтесь с 🫂&nbsp;друзьями 🗣️&nbsp;чатом или 👥&nbsp;сообществом.
+              Коллаборируйтесь с 🫂&nbsp;друзьями 🗣️&nbsp;чатом или
+              👥&nbsp;сообществом.
             </p>
           </div>
         </div>
@@ -209,14 +233,14 @@ export function HomePanel({ id }: Props) {
             {/* Tabs */}
             <Tabs className="home-tabs">
               <TabsItem
-                selected={activeTab === 'recent'}
-                onClick={() => setActiveTab('recent')}
+                selected={activeTab === "recent"}
+                onClick={() => setActiveTab("recent")}
               >
                 Недавние
               </TabsItem>
               <TabsItem
-                selected={activeTab === 'mine'}
-                onClick={() => setActiveTab('mine')}
+                selected={activeTab === "mine"}
+                onClick={() => setActiveTab("mine")}
               >
                 Мои
               </TabsItem>
@@ -224,16 +248,26 @@ export function HomePanel({ id }: Props) {
 
             {/* Board list */}
             {loading && !boards.length ? (
-              <Box style={{ display: 'flex', justifyContent: 'center', paddingTop: 48 }}>
+              <Box
+                style={{
+                  display: "flex",
+                  justifyContent: "center",
+                  paddingTop: 48,
+                }}
+              >
                 <Spinner size="l" />
               </Box>
             ) : tabBoards.length === 0 ? (
               <EmptyState
-                header={activeTab === 'mine' ? 'Ещё нет своих досок' : 'Нет недавних досок'}
+                header={
+                  activeTab === "mine"
+                    ? "Ещё нет своих досок"
+                    : "Нет недавних досок"
+                }
                 text={
-                  activeTab === 'mine'
-                    ? 'Нажмите «Создать доску», чтобы начать'
-                    : 'Откройте доску по ссылке или создайте свою'
+                  activeTab === "mine"
+                    ? "Нажмите «Создать доску», чтобы начать"
+                    : "Откройте доску по ссылке или создайте свою"
                 }
                 actionLabel="Создать доску"
                 onAction={openCreate}
@@ -241,7 +275,11 @@ export function HomePanel({ id }: Props) {
             ) : (
               <div className="board-grid">
                 {tabBoards.map((b) => (
-                  <BoardListItem key={b.id} board={b} onClick={() => openBoard(b.id)} />
+                  <BoardListItem
+                    key={b.id}
+                    board={b}
+                    onClick={() => openBoard(b.id)}
+                  />
                 ))}
               </div>
             )}
@@ -251,10 +289,11 @@ export function HomePanel({ id }: Props) {
         )}
       </PullToRefresh>
 
-
       {newBoardModal}
 
-      {snackbar && <Snackbar onClose={() => setSnackbar(null)}>{snackbar}</Snackbar>}
+      {snackbar && (
+        <Snackbar onClose={() => setSnackbar(null)}>{snackbar}</Snackbar>
+      )}
     </Panel>
   );
 }

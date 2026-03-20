@@ -15,5 +15,5 @@ export const tagsApi = {
     api.post<{ cardId: string; tagId: string }>('/tags/assign', { cardId, tagId }),
 
   unassign: (cardId: string, tagId: string) =>
-    api.delete<void>('/tags/assign', { cardId, tagId } as any),
+    api.delete<void>('/tags/assign', { cardId, tagId }),
 };

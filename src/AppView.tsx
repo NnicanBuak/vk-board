@@ -8,7 +8,8 @@ import { HomePanel } from './panels/HomePanel';
 import { BoardPanel } from './panels/BoardPanel';
 import { BoardAccessPanel } from './panels/BoardAccessPanel';
 import { UpdateBanner } from './components/common/UpdateBanner';
-import { FabProvider, useFab, fabClickRef } from './store/FabContext';
+import { FabProvider } from './store/FabContext';
+import { useFab, fabClickRef } from './store/fabState';
 
 function GlobalFab() {
   const { visible } = useFab();

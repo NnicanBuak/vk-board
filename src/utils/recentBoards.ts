@@ -6,7 +6,11 @@ export function trackBoardVisit(boardId: string): void {
   const updated = [boardId, ...ids.filter((id) => id !== boardId)].slice(0, MAX_RECENT);
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-  } catch {}
+  } catch (error) {
+    if (import.meta.env.DEV) {
+      console.warn('Failed to persist recent boards', error);
+    }
+  }
 }
 
 export function getRecentBoardIds(): string[] {

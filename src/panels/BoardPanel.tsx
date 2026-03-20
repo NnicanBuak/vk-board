@@ -27,7 +27,7 @@ import {
   Icon24MoreHorizontal,
 } from '@vkontakte/icons';
 import { useRouteNavigator, useParams, useActiveVkuiLocation } from '@vkontakte/vk-mini-apps-router';
-import { useFab } from '../store/FabContext';
+import { useFab } from '../store/fabState';
 import { isDraggingRef } from '../store/dragRef';
 import { PANELS } from '../router/routes';
 import bridge from '@vkontakte/vk-bridge';
@@ -35,7 +35,7 @@ import bridge from '@vkontakte/vk-bridge';
 import { useBoardDetail } from '../hooks/useBoardDetail';
 import { useCards } from '../hooks/useCards';
 import { useColumns } from '../hooks/useColumns';
-import { useUser } from '../store/UserContext';
+import { useUser } from '../store/userState';
 import { ErrorPlaceholder } from '../components/common/ErrorPlaceholder';
 import { KanbanBoard } from '../components/board/KanbanBoard';
 import { BrainstormBoard } from '../components/board/BrainstormBoard';

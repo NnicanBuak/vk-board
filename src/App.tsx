@@ -4,7 +4,8 @@ import { RouterProvider } from '@vkontakte/vk-mini-apps-router';
 import '@vkontakte/vkui/dist/vkui.css';
 
 import { router } from './router/routes';
-import { UserProvider, useUser } from './store/UserContext';
+import { UserProvider } from './store/UserContext';
+import { useUser } from './store/userState';
 import { useVKBridge } from './bridge/useVKBridge';
 import { ErrorPlaceholder } from './components/common/ErrorPlaceholder';
 import { AppView } from './AppView';

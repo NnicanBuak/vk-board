@@ -13,10 +13,13 @@ interface SelfInfo {
 export function usePresence(boardId: string, self: SelfInfo | null) {
   const [viewers, setViewers] = useState<PresenceUser[]>([]);
   const selfRef = useRef(self);
-  selfRef.current = self;
 
   useEffect(() => {
-    if (!boardId || !self) return;
+    selfRef.current = self;
+  }, [self]);
+
+  useEffect(() => {
+    if (!boardId || !selfRef.current) return;
 
     let alive = true;
 
@@ -42,7 +45,7 @@ export function usePresence(boardId: string, self: SelfInfo | null) {
       clearInterval(poll);
       presenceApi.leave(boardId).catch(() => {});
     };
-  }, [boardId, !!self]);
+  }, [boardId, self]);
 
   return viewers;
 }

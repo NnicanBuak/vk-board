@@ -37,7 +37,10 @@ export function useBoards() {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const timeout = window.setTimeout(() => { void load(); }, 0);
+    return () => window.clearTimeout(timeout);
+  }, [load]);
 
   const createBoard = useCallback(
     async (data: { title: string; description?: string; coverImage?: string; boardType?: string }) => {

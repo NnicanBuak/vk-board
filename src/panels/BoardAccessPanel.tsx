@@ -27,7 +27,7 @@ import { Icon28UserAddOutline } from '@vkontakte/icons';
 import { useRouteNavigator, useParams } from '@vkontakte/vk-mini-apps-router';
 import { boardsApi } from '../api/boards';
 import { useBoardDetail } from '../hooks/useBoardDetail';
-import { useUser } from '../store/UserContext';
+import { useUser } from '../store/userState';
 import type { BoardVisibility } from '../types/board';
 
 const VK_APP_ID = Number(import.meta.env.VITE_VK_APP_ID ?? 0);
@@ -171,7 +171,10 @@ export function BoardAccessPanel({ id }: Props) {
           photo: u.photo_100 ?? '',
         })));
       }
-    } catch (e) {
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.error('Failed to load members list', error);
+      }
       setCandidatesError('Не удалось загрузить список. Проверьте разрешения или попробуйте снова.');
     } finally {
       setLoadingCandidates(false);
@@ -183,16 +186,15 @@ export function BoardAccessPanel({ id }: Props) {
     await loadCandidates();
   };
 
-  const existingIds = new Set(members.map((m) => m.userId));
-
-  const filtered = useMemo(() =>
-    candidates
+  const filtered = useMemo(() => {
+    const existingIds = new Set(members.map((m) => m.userId));
+    return candidates
       .filter((c) => !existingIds.has(c.id))
       .filter((c) => {
         const q = search.toLowerCase();
         return !q || `${c.firstName} ${c.lastName}`.toLowerCase().includes(q);
-      }),
-  [candidates, search, existingIds, members]);
+      });
+  }, [candidates, search, members]);
 
   const toggleSelect = (uid: number) => {
     setSelectedIds((prev) =>

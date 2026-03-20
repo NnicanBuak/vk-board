@@ -116,7 +116,6 @@ export function KanbanBoard({
   };
 
   const openAddCard = useCallback((columnId: string | null = null) => {
-    setEditingCard(null);
     setAddCardColumnId(columnId);
     setActiveModal(MODAL_CARD);
   }, []);
