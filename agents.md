@@ -86,7 +86,9 @@ Use this format for every commit message: `type(scope): summary`.
 - Write the summary in English, in imperative mood, with no trailing period.
 - Keep the summary under 72 characters.
 - Use a body when the change touches more than one file or carries more than a small diff.
+- Write the body as a bullet-list changelog, one change per line, using `- `.
 - In the body, explain what changed, why it changed, and how to verify it.
+- Before creating or suggesting a commit, validate the exact message with `commitlint`.
 - Add `Refs: TASK-123` when the commit is tied to a task or issue.
 - Add `Checks: lint, typecheck` when you verified the commit locally.
 - Do not use default merge commit messages; rewrite them or squash them.
