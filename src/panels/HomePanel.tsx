@@ -21,12 +21,13 @@ import {
   useActiveVkuiLocation,
 } from "@vkontakte/vk-mini-apps-router";
 import {
-  Icon24Squareshape3VerticalOutline,
-  Icon24BrainOutline,
-  Icon24DocumentListOutline,
+  Icon20Users3Outline,
+  Icon20MessageTextOutline,
+  Icon20UsersOutline,
 } from "@vkontakte/icons";
 import { useFab } from "../store/fabState";
 import { PANELS } from "../router/routes";
+import { BOARD_TYPES, BOARD_TYPE_ICONS } from "../constants/boardTypes";
 
 import { useBoards } from "../hooks/useBoards";
 import { BoardListItem } from "../components/board/BoardListItem";
@@ -34,30 +35,6 @@ import { EmptyState } from "../components/common/EmptyState";
 import { ErrorPlaceholder } from "../components/common/ErrorPlaceholder";
 import { getRecentBoardIds } from "../utils/recentBoards";
 import type { Board, BoardType } from "../types/board";
-
-const BOARD_TYPES: { value: BoardType; label: string; desc: string }[] = [
-  {
-    value: "kanban",
-    label: "Канбан",
-    desc: "Колонки и задачи с исполнителями и дедлайнами",
-  },
-  {
-    value: "brainstorm",
-    label: "Брейншторм",
-    desc: "Сетка идей с голосованием, без колонок",
-  },
-  {
-    value: "notes",
-    label: "Заметки",
-    desc: "Страницы с форматированным текстом, как в Notion",
-  },
-];
-
-const BOARD_TYPE_ICONS: Record<BoardType, React.ReactNode> = {
-  kanban: <Icon24Squareshape3VerticalOutline />,
-  brainstorm: <Icon24BrainOutline />,
-  notes: <Icon24DocumentListOutline />,
-};
 
 const MODAL_CREATE = "create_board";
 
@@ -167,14 +144,16 @@ export function HomePanel({ id }: Props) {
               <div className="board-type-picker">
                 {BOARD_TYPES.map((t) => {
                   const active = boardType === t.value;
+                  const BoardTypeIcon = BOARD_TYPE_ICONS[t.value];
                   return (
                     <button
                       key={t.value}
+                      type="button"
                       className={`board-type-btn${active ? " board-type-btn--active" : ""}`}
                       onClick={() => setBoardType(t.value)}
                     >
-                      <span className="board-type-btn__icon">
-                        {BOARD_TYPE_ICONS[t.value]}
+                      <span className="board-type-btn__icon" aria-hidden="true">
+                        <BoardTypeIcon />
                       </span>
                       <div className="board-type-btn__text">
                         <div className="board-type-btn__name">{t.label}</div>
@@ -215,8 +194,22 @@ export function HomePanel({ id }: Props) {
           <div className="page-inner hero-bg__content">
             <h1 className="hero__title">Совместные доски</h1>
             <p className="hero__subtitle">
-              Коллаборируйтесь с 🫂&nbsp;друзьями 🗣️&nbsp;чатом или
-              👥&nbsp;сообществом.
+              Коллаборируйтесь с <br />
+              <Icon20UsersOutline
+                className="hero__subtitle-icon"
+                aria-hidden
+              />
+              &nbsp;друзьями <br />
+              <Icon20MessageTextOutline
+                className="hero__subtitle-icon"
+                aria-hidden
+              />
+              &nbsp;чатами<br />
+              <Icon20Users3Outline
+                className="hero__subtitle-icon"
+                aria-hidden
+              />
+              &nbsp;сообществами
             </p>
           </div>
         </div>

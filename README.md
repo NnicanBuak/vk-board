@@ -355,13 +355,16 @@ npx @vkontakte/vk-tunnel --insecure
 | `VK_SECRET`    | prod        | Сервисный ключ VK-приложения. Используется для проверки HMAC-SHA256 подписи `vk_sign`. **Если не задан или `NODE_ENV=development`** — сервер работает в dev-режиме: принимает `{ userId, firstName, lastName }` напрямую без проверки подписи. |
 | `FRONTEND_URL` | **да**      | Разрешённый CORS-origin. В production — URL Vercel (`https://your-app.vercel.app`). Можно передать несколько через запятую. В non-production режиме дополнительно разрешается `*.vercel.app`.                                                  |
 | `PORT`         | нет         | Порт HTTP-сервера. По умолчанию `3001`. Railway задаёт автоматически — не переопределять в Variables.                                                                                                                                          |
+| `PUBLIC_UPLOAD_URL` | **да** | Абсолютный URL, по которому frontend сможет скачать загруженный файл. Локально: `http://localhost:3001`. В Railway — `https://<service>.up.railway.app`. Используется в ответе `/api/upload`. |
+| `UPLOAD_DIR`   | нет         | Путь до директории для файлов (можно относительный, по умолчанию `uploads` в каталоге `server/`). Создаётся автоматически. |
+| `UPLOAD_MAX_BYTES` | нет     | Лимит размера файла в байтах. По умолчанию `5242880` (5 МБ). При превышении сервер вернёт 413. |
 | `NODE_ENV`     | нет         | `production` — включает строгую валидацию VK-подписи и отключает автоматическое разрешение `*.vercel.app` в CORS. По умолчанию `development`.                                                                                                  |
 
 ### Фронтенд (`.env` / Vercel Environment Variables)
 
 | Переменная       | Обязательна | Описание                                                                                                                    |
 | ---------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `VITE_API_URL`   | **да**      | Базовый URL бэкенда без `/api` и без trailing slash. Локально: `http://localhost:3001`. Прод: Railway URL.                  |
+| `VITE_API_URL`   | **да**      | Базовый URL REST API **с префиксом `/api`**. Локально: `http://localhost:3001/api`. На Vercel — `https://api.example.com/api`. |
 | `VITE_VK_APP_ID` | **да**      | Числовой ID VK-приложения. Нужен для инициализации VK Bridge и запросов к VK API (галерея фото, участники чата/сообщества). |
 
 > В dev-режиме (`NODE_ENV=development` / `vite dev`) фронтенд подставляет `userId=1` автоматически и не обращается к VK Bridge. `VITE_VK_APP_ID` в этом случае не используется.

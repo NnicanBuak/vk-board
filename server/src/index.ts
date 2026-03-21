@@ -8,6 +8,7 @@ import imagesRouter from './routes/images';
 import columnsRouter from './routes/columns';
 import commentsRouter from './routes/comments';
 import tagsRouter from './routes/tags';
+import uploadRouter, { UPLOAD_DIR } from './routes/upload';
 
 const app = express();
 const PORT = process.env.PORT ?? 3001;
@@ -31,7 +32,10 @@ app.use(express.json());
 app.use((req, _res, next) => { console.log(`${req.method} ${req.path}`); next(); });
 
 // Open routes (no auth)
+app.use('/uploads', express.static(UPLOAD_DIR));
+
 app.use('/api/images', imagesRouter);
+app.use('/api/upload', uploadRouter);
 
 app.use('/api/auth', authRouter);
 app.use('/api/boards', boardsRouter);

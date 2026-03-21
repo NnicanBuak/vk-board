@@ -1,5 +1,10 @@
-import type { Board, BoardType } from '../../types/board';
+import type { Board } from '../../types/board';
 import { formatRelative } from '../../utils/formatDate';
+import {
+  BOARD_TYPE_ICONS,
+  BOARD_TYPE_LABELS,
+  BOARD_TYPE_THEMES,
+} from '../../constants/boardTypes';
 
 const PREVIEW_GRADIENTS = [
   'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
@@ -20,12 +25,6 @@ function pickGradient(id: string): string {
   return PREVIEW_GRADIENTS[hash % PREVIEW_GRADIENTS.length];
 }
 
-const TYPE_LABELS: Record<BoardType, string> = {
-  kanban:    'Канбан',
-  brainstorm:'Брейншторм',
-  notes:     'Заметки',
-};
-
 interface Props {
   board: Board;
   onClick: () => void;
@@ -34,11 +33,14 @@ interface Props {
 export function BoardListItem({ board, onClick }: Props) {
   const previewStyle = board.coverImage
     ? {
-        backgroundImage: `url(/api/images?url=${encodeURIComponent(board.coverImage)})`,
-        backgroundSize: 'cover' as const,
-        backgroundPosition: 'center' as const,
-      }
+      backgroundImage: `url(/api/images?url=${encodeURIComponent(board.coverImage)})`,
+      backgroundSize: 'cover' as const,
+      backgroundPosition: 'center' as const,
+    }
     : { background: pickGradient(board.id) };
+  const TypeIcon = BOARD_TYPE_ICONS[board.boardType];
+  const typeLabel = BOARD_TYPE_LABELS[board.boardType] ?? board.boardType;
+  const typeTheme = BOARD_TYPE_THEMES[board.boardType] ?? BOARD_TYPE_THEMES.kanban;
 
   return (
     <div className="board-card" onClick={onClick} role="button" tabIndex={0}
@@ -52,7 +54,23 @@ export function BoardListItem({ board, onClick }: Props) {
         )}
         <div className="board-card__footer">
           <span className="board-card__date">{formatRelative(board.createdAt)}</span>
-          <span className="board-card__type">{TYPE_LABELS[board.boardType] ?? board.boardType}</span>
+          <span
+            className="board-card__type"
+            style={{
+              backgroundColor: typeTheme.bg,
+              color: typeTheme.text,
+            }}
+          >
+            {TypeIcon ? (
+              <TypeIcon
+                className="board-card__type-icon"
+                aria-hidden
+                width={18}
+                height={18}
+              />
+            ) : null}
+            {typeLabel}
+          </span>
         </div>
       </div>
     </div>

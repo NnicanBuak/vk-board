@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo, type JSX } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, type JSX, type CSSProperties } from 'react';
 import {
   Panel,
   PanelHeader,
@@ -9,6 +9,8 @@ import {
   PullToRefresh,
   Snackbar,
   Box,
+  ActionSheet,
+  ActionSheetItem,
   ModalRoot,
   ModalPage,
   ModalPageContent,
@@ -23,7 +25,7 @@ import {
 } from '@vkontakte/vkui';
 import {
   Icon24LinkedOutline,
-  Icon24MoreHorizontal,
+  Icon28MoreHorizontal,
   Icon16SortArrowUp,
   Icon16SortArrowDown,
   Icon16Like,
@@ -49,8 +51,10 @@ import { buildShareLink } from '../utils/buildShareLink';
 import { trackBoardVisit } from '../utils/recentBoards';
 import { tagsApi } from '../api/tags';
 import { boardsApi } from '../api/boards';
+import { uploadImage } from '../api/uploads';
 import { usePresence } from '../hooks/usePresence';
 import type { Card, Tag } from '../types/card';
+import { BOARD_TYPE_LABELS, BOARD_TYPE_THEMES } from '../constants/boardTypes';
 
 const AVATAR_COLORS = ['#e53935', '#8e24aa', '#1e88e5', '#00897b', '#f4511e', '#33b679', '#fb8c00', '#6d4c41'];
 function memberColor(userId: number) { return AVATAR_COLORS[userId % AVATAR_COLORS.length]; }
@@ -59,13 +63,6 @@ const MODAL_RENAME = 'board_rename';
 const MODAL_DESC = 'board_desc';
 const MODAL_COVER = 'board_cover';
 const MODAL_SORT = 'brainstorm_sort';
-const MODAL_ACTIONS = 'board_actions';
-
-const BOARD_TYPE_LABELS: Record<string, string> = {
-  kanban: 'Канбан',
-  brainstorm: 'Брейншторм',
-  notes: 'Заметки',
-};
 
 const VK_APP_ID = Number(import.meta.env.VITE_VK_APP_ID ?? 0);
 
@@ -87,6 +84,7 @@ export function BoardPanel({ id }: Props) {
   const userId = user?.userId ?? 0;
 
   const [activeModal, setActiveModal] = useState<string | null>(null);
+  const [actionsSheetOpen, setActionsSheetOpen] = useState(false);
   const fabActionRef = useRef<(() => void) | null>(null);
   const [selectedCard, setSelectedCard] = useState<Card | null>(null);
   const [snackbar, setSnackbar] = useState<string | null>(null);
@@ -94,6 +92,12 @@ export function BoardPanel({ id }: Props) {
   const [brainstormDirection, setBrainstormDirection] = useState<'desc' | 'asc'>('desc');
   const sortHoldTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sortLongPressTriggered = useRef(false);
+  const closeActionsSheet = () => setActionsSheetOpen(false);
+  const openActionsSheet = () => setActionsSheetOpen(true);
+  const runFromActionsSheet = (callback: () => void) => () => {
+    closeActionsSheet();
+    callback();
+  };
 
   // Mini-modal state
   const [editTitle, setEditTitle] = useState('');
@@ -108,6 +112,7 @@ export function BoardPanel({ id }: Props) {
   const [boardMembers, setBoardMembers] = useState<{ userId: number; role: string }[]>([]);
   const [viewersOpen, setViewersOpen] = useState(false);
   const viewersBtnRef = useRef<HTMLDivElement>(null);
+  const actionsSheetToggleRef = useRef<HTMLButtonElement | null>(null);
   const coverFileRef = useRef<HTMLInputElement>(null);
 
   const { board, loading: boardLoading, error: boardError, refresh: refreshBoard, updateBoard } = useBoardDetail(boardId);
@@ -209,11 +214,7 @@ export function BoardPanel({ id }: Props) {
     if (!file) return;
     setUploadingCover(true);
     try {
-      const form = new FormData();
-      form.append('file', file);
-      const res = await fetch('/api/upload', { method: 'POST', body: form });
-      if (!res.ok) throw new Error('Ошибка загрузки');
-      const { url } = await res.json() as { url: string };
+      const { url } = await uploadImage(file);
       setCoverUrl(url);
       setCoverPreview(url);
     } catch (err) {
@@ -298,6 +299,7 @@ export function BoardPanel({ id }: Props) {
 
 
   const boardType = board?.boardType ?? 'kanban';
+  const boardTypeTheme = BOARD_TYPE_THEMES[boardType] ?? BOARD_TYPE_THEMES.kanban;
 
   useEffect(() => {
     if (boardType !== 'brainstorm' && activeModal === MODAL_SORT) {
@@ -306,10 +308,10 @@ export function BoardPanel({ id }: Props) {
   }, [boardType, activeModal]);
 
   useEffect(() => {
-    if (!isAdmin && activeModal === MODAL_ACTIONS) {
-      setActiveModal(null);
+    if (!isAdmin && actionsSheetOpen) {
+      setActionsSheetOpen(false);
     }
-  }, [isAdmin, activeModal]);
+  }, [isAdmin, actionsSheetOpen]);
 
   useEffect(() => {
     return () => {
@@ -360,12 +362,12 @@ export function BoardPanel({ id }: Props) {
 
   useEffect(() => {
     const active = panel === PANELS.BOARD && canEdit && boardType !== 'notes';
-    if (!active) {
+    if (!active || actionsSheetOpen) {
       hideFab();
       return;
     }
     showFab(() => fabActionRef.current?.());
-  }, [panel, canEdit, boardType, showFab, hideFab]);
+  }, [panel, canEdit, boardType, actionsSheetOpen, showFab, hideFab]);
 
   const registerFabAction = useCallback((handler: (() => void) | null) => {
     fabActionRef.current = handler;
@@ -374,42 +376,6 @@ export function BoardPanel({ id }: Props) {
   const closeModal = () => setActiveModal(null);
 
   const modals: JSX.Element[] = [];
-
-  if (isAdmin) {
-    modals.push(
-      <ModalPage
-        key={MODAL_ACTIONS}
-        id={MODAL_ACTIONS}
-        settlingHeight={50}
-        hideCloseButton
-        header={
-          <ModalPageHeader after={<PanelHeaderClose onClick={closeModal} />}>
-            Действия с доской
-          </ModalPageHeader>
-        }
-      >
-        <ModalPageContent>
-          <List>
-            <CellButton onClick={openRename}>
-              Переименовать
-            </CellButton>
-            <CellButton onClick={openDesc}>
-              Изменить описание
-            </CellButton>
-            <CellButton onClick={openCover}>
-              Изменить обложку
-            </CellButton>
-            <CellButton onClick={handleOpenAccessSettings}>
-              Настройки доступа
-            </CellButton>
-            <CellButton appearance="negative" onClick={handleAskDelete}>
-              Удалить доску
-            </CellButton>
-          </List>
-        </ModalPageContent>
-      </ModalPage>,
-    );
-  }
 
   if (boardType === 'brainstorm') {
     modals.push(
@@ -578,17 +544,28 @@ export function BoardPanel({ id }: Props) {
   );
 
   return (
-    <Panel id={id}>
+    <Panel id={id} className="board-panel">
       <PanelHeader
+        className="board-panel-header"
         before={<PanelHeaderBack onClick={() => navigator.back()} />}
-        after={
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingRight: 4 }}>
+      >
+        <div className="board-panel-header__inner">
+          <span
+            className="board-panel-header__chip"
+            style={{
+              '--board-panel-chip-bg': boardTypeTheme.bg,
+              '--board-panel-chip-color': boardTypeTheme.text,
+            } as CSSProperties}
+          >
+            {BOARD_TYPE_LABELS[boardType] ?? 'Доска'}
+          </span>
+          <div className="board-panel-header__actions">
             {viewers.length > 0 && (
-              <div ref={viewersBtnRef} style={{ position: 'relative' }}>
+              <div className="board-panel-header__viewers" ref={viewersBtnRef}>
                 <button
                   className="member-avatars"
+                  type="button"
                   onClick={() => setViewersOpen((v) => !v)}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
                   aria-label="Кто смотрит"
                 >
                   {viewers.slice(0, 3).map((v) => (
@@ -619,16 +596,15 @@ export function BoardPanel({ id }: Props) {
             </PanelHeaderButton>
             {isAdmin && (
               <PanelHeaderButton
-                onClick={() => setActiveModal(MODAL_ACTIONS)}
+                onClick={openActionsSheet}
                 aria-label="Действия с доской"
+                getRootRef={actionsSheetToggleRef}
               >
-                <Icon24MoreHorizontal />
+                <Icon28MoreHorizontal />
               </PanelHeaderButton>
             )}
           </div>
-        }
-      >
-        {BOARD_TYPE_LABELS[board?.boardType ?? ''] ?? 'Доска'}
+        </div>
       </PanelHeader>
 
       <PullToRefresh
@@ -704,6 +680,31 @@ export function BoardPanel({ id }: Props) {
           </div>
         )}
       </PullToRefresh>
+
+      {isAdmin && actionsSheetOpen && (
+        <ActionSheet
+          className="board-actions-sheet"
+          iosCloseItem={null}
+          onClose={closeActionsSheet}
+          toggleRef={actionsSheetToggleRef}
+        >
+          <ActionSheetItem onClick={runFromActionsSheet(openRename)}>
+            Переименовать
+          </ActionSheetItem>
+          <ActionSheetItem onClick={runFromActionsSheet(openDesc)}>
+            Изменить описание
+          </ActionSheetItem>
+          <ActionSheetItem onClick={runFromActionsSheet(openCover)}>
+            Изменить обложку
+          </ActionSheetItem>
+          <ActionSheetItem onClick={runFromActionsSheet(handleOpenAccessSettings)}>
+            Настройки доступа
+          </ActionSheetItem>
+          <ActionSheetItem mode="destructive" onClick={runFromActionsSheet(handleAskDelete)}>
+            Удалить доску
+          </ActionSheetItem>
+        </ActionSheet>
+      )}
 
       {/* Mini modals */}
       <ModalRoot activeModal={activeModal} onClose={closeModal}>

@@ -1,4 +1,4 @@
-const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3001/api';
+export const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3001/api';
 
 let authToken: string | null = null;
 
@@ -20,7 +20,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     headers['Authorization'] = `Bearer ${authToken}`;
   }
 
-  const res = await fetch(`${BASE_URL}${path}`, { ...init, headers });
+  const res = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
