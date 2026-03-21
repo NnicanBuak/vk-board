@@ -2,9 +2,13 @@ generator client {
   provider = "prisma-client-js"
 }
 
+generator sharedClient {
+  provider = "prisma-client-js"
+  output   = "../../node_modules/.prisma/client"
+}
+
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 enum CardStatus {
@@ -18,10 +22,8 @@ enum BoardRoleType {
 }
 
 enum BoardType {
-  voting
   kanban
   brainstorm
-  retro
   notes
 }
 

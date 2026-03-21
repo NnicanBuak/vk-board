@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Panel,
   Button,
@@ -56,6 +56,7 @@ export function HomePanel({ id }: Props) {
   const [boardType, setBoardType] = useState<BoardType>("kanban");
   const [creating, setCreating] = useState(false);
   const [snackbar, setSnackbar] = useState<string | null>(null);
+  const createTitleInputRef = useRef<HTMLInputElement | null>(null);
 
   const openCreate = () => {
     setTitle("Новая доска");
@@ -74,6 +75,14 @@ export function HomePanel({ id }: Props) {
     showFab(openCreate);
     // openCreate is recreated on every render — intentional, FAB always gets fresh handler
   }, [panel, activeModal, showFab, hideFab]);
+
+  useEffect(() => {
+    if (activeModal !== MODAL_CREATE) return;
+    const frame = requestAnimationFrame(() => {
+      createTitleInputRef.current?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [activeModal]);
 
   const handleCreate = async () => {
     if (!title.trim()) return;
@@ -127,7 +136,7 @@ export function HomePanel({ id }: Props) {
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Например: дорожная карта"
                 maxLength={100}
-                autoFocus
+                getRef={createTitleInputRef}
                 onFocus={(e) => e.target.select()}
               />
             </FormItem>

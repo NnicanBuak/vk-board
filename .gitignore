@@ -23,6 +23,9 @@ server/.env
 # Prisma generated
 server/prisma/*.db
 
+#TypeScript generated
+tsconfig.tsbuildinfo
+
 # Editor directories and files
 agents.md
 .claude/

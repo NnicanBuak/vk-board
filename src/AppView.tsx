@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { SplitLayout, SplitCol, View } from '@vkontakte/vkui';
 import { useActiveVkuiLocation } from '@vkontakte/vk-mini-apps-router';
 import { useRegisterSW } from 'virtual:pwa-register/react';
@@ -36,6 +36,38 @@ function AppViewInner() {
     onNeedRefresh() { setNeedRefresh(true); },
     onOfflineReady() {},
   });
+
+  useEffect(() => {
+    if (typeof document === 'undefined') {
+      return () => undefined;
+    }
+
+    const root = document.documentElement;
+    const overlayClassName = 'vk-app-header-present';
+    let frameId = 0;
+
+    const syncOverlayPresence = () => {
+      const hasOverlay = Boolean(document.querySelector('.vkAppHeader'));
+      root.classList.toggle(overlayClassName, hasOverlay);
+    };
+
+    syncOverlayPresence();
+
+    const observer = new MutationObserver(() => {
+      cancelAnimationFrame(frameId);
+      frameId = window.requestAnimationFrame(syncOverlayPresence);
+    });
+
+    if (document.body) {
+      observer.observe(document.body, { childList: true, subtree: true });
+    }
+
+    return () => {
+      observer.disconnect();
+      cancelAnimationFrame(frameId);
+      root.classList.remove(overlayClassName);
+    };
+  }, []);
 
   return (
     <SplitLayout>

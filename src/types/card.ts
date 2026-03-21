@@ -1,43 +1,21 @@
-export type CardStatus = 'default' | 'selected';
+import type {
+  CardEntity,
+  CardStatusServer,
+  ColumnEntity,
+  CommentEntity,
+  TagEntity,
+} from './prisma';
 
-export interface Tag {
-  id: string;
-  boardId: string;
-  name: string;
-  color: string;
-}
+export type CardStatus = CardStatusServer;
 
-export interface Card {
-  id: string;
-  boardId: string;
-  columnId: string | null;
-  authorId: number;
-  title: string;
-  description: string | null;
-  url: string | null;
-  imageUrl: string | null;
-  status: CardStatus;
-  assignees: number[];
-  dueDate: string | null;
-  order: number;
-  createdAt: string;
+export type Tag = TagEntity;
+export type Column = ColumnEntity;
+export type Comment = CommentEntity;
+
+export type Card = CardEntity & {
   likeCount: number;
   likedBy: number[];
   tags: Tag[];
-}
-
-export interface Comment {
-  id: string;
-  cardId: string;
-  userId: number;
-  text: string;
-  createdAt: string;
-}
-
-export interface Column {
-  id: string;
-  boardId: string;
-  title: string;
-  order: number;
-  createdAt: string;
-}
+  assignees: number[];
+  dueDate: string | null;
+};

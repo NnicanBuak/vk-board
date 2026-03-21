@@ -20,4 +20,26 @@ export default defineConfig([
       globals: globals.browser,
     },
   },
+  {
+    files: ['src/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@prisma/client',
+              message: 'Импортируй типы Prisma через src/types/prisma.ts',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ['src/types/prisma.ts'],
+    rules: {
+      'no-restricted-imports': 'off',
+    },
+  },
 ])

@@ -114,6 +114,8 @@ export function BoardPanel({ id }: Props) {
   const viewersBtnRef = useRef<HTMLDivElement>(null);
   const actionsSheetToggleRef = useRef<HTMLButtonElement | null>(null);
   const coverFileRef = useRef<HTMLInputElement>(null);
+  const renameInputRef = useRef<HTMLInputElement | null>(null);
+  const descTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const { board, loading: boardLoading, error: boardError, refresh: refreshBoard, updateBoard } = useBoardDetail(boardId);
   const { cards, loading: cardsLoading, error: cardsError, refresh: refreshCards, addCard, updateCard, removeCard, toggleLike } = useCards(boardId, 'date');
@@ -154,6 +156,22 @@ export function BoardPanel({ id }: Props) {
     if (updated) setSelectedCard(updated);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cards]);
+
+  useEffect(() => {
+    if (activeModal !== MODAL_RENAME) return;
+    const frame = requestAnimationFrame(() => {
+      renameInputRef.current?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [activeModal]);
+
+  useEffect(() => {
+    if (activeModal !== MODAL_DESC) return;
+    const frame = requestAnimationFrame(() => {
+      descTextareaRef.current?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [activeModal]);
 
   const handleCopyLink = async () => {
     const link = buildShareLink(boardId);
@@ -431,7 +449,7 @@ export function BoardPanel({ id }: Props) {
               value={editTitle}
               onChange={(e) => setEditTitle(e.target.value)}
               maxLength={100}
-              autoFocus
+              getRef={renameInputRef}
               onKeyDown={(e) => e.key === 'Enter' && handleSaveTitle()}
             />
           </FormItem>
@@ -463,7 +481,7 @@ export function BoardPanel({ id }: Props) {
               placeholder="Необязательно"
               maxLength={300}
               rows={4}
-              autoFocus
+              getRef={descTextareaRef}
             />
           </FormItem>
           <FormItem>

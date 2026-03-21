@@ -1,5 +1,5 @@
 {
-  "name": "board-for-chat-server",
+  "name": "vk-board",
   "version": "1.0.0",
   "description": "Backend API for Board for Chat VK Mini App",
   "main": "dist/index.js",
@@ -13,9 +13,10 @@
     "db:studio": "prisma studio"
   },
   "dependencies": {
-    "@prisma/client": "^5.22.0",
+    "@prisma/client": "^7.5.0",
     "@types/multer": "^1.4.13",
     "cors": "^2.8.5",
+    "dotenv": "^17.3.1",
     "express": "^4.21.2",
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.1.1"
@@ -28,7 +29,7 @@
     "@types/express": "^5.0.0",
     "@types/jsonwebtoken": "^9.0.7",
     "@types/node": "^22.10.10",
-    "prisma": "^5.22.0",
+    "prisma": "^7.5.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3"
   }

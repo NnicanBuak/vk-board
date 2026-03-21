@@ -1,17 +1,17 @@
-services:
+﻿services:
   db:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
       POSTGRES_USER: boarduser
       POSTGRES_PASSWORD: boardpass
-      POSTGRES_DB: board_for_chat
+      POSTGRES_DB: vk-board
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U boarduser -d board_for_chat"]
+      test: ["CMD-SHELL", "pg_isready -U boarduser -d vk-board"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -24,7 +24,7 @@ services:
     ports:
       - "3001:3001"
     environment:
-      DATABASE_URL: postgresql://boarduser:boardpass@db:5432/board_for_chat
+      DATABASE_URL: postgresql://boarduser:boardpass@db:5432/vk-board
       JWT_SECRET: ${JWT_SECRET}
       VK_SECRET: ${VK_SECRET}
       FRONTEND_URL: http://localhost:5173
@@ -71,3 +71,4 @@ services:
 
 volumes:
   pgdata:
+
