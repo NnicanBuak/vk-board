@@ -26,3 +26,37 @@ jobs:
 
       - name: Run TypeScript type-check
         run: npm run typecheck
+
+  ts-build:
+    name: TS build (tsc -b)
+    runs-on: ubuntu-latest
+    needs: lint-and-typecheck
+    permissions:
+      contents: read
+      statuses: write
+    env:
+      DATABASE_URL: postgresql://boarduser:boardpass@localhost:5432/vk-board
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run prisma:generate
+
+      - name: Run TypeScript build
+        run: npm run tsc:build
+
+      - name: Notify Vercel deployment status
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: vercel/repository-dispatch/actions/status@v1
+        with:
+          name: Vercel - vk-board: CI
