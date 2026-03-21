@@ -24,6 +24,7 @@ server/.env
 server/prisma/*.db
 
 # Editor directories and files
+agents.md
 .claude/
 .codex/
 tasks/
