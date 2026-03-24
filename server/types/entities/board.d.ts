@@ -3,6 +3,8 @@ import type {
   BoardRoleTypeEntity,
 } from './prisma';
 
+export type BoardPublicRoleEntity = BoardRoleTypeEntity;
+
 export type {
   BoardEntity,
   BoardRoleEntity,
@@ -11,10 +13,10 @@ export type {
 } from './prisma';
 
 export type BoardWithRoleEntity = PrismaBoardEntity & {
-  myRole: BoardRoleTypeEntity;
+  myRole: BoardPublicRoleEntity;
 };
 
 export type BoardMemberEntity = {
   userId: number;
-  role: BoardRoleTypeEntity;
+  role: BoardPublicRoleEntity;
 };

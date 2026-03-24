@@ -49,7 +49,12 @@ export function useVKBridge(): BridgeState {
           lastName: 'User',
           photo100: '',
         };
-        await authenticate({ userId: DEV_USER_ID, firstName: 'Dev', lastName: 'User' });
+        const vk_params = new URLSearchParams({
+          vk_user_id: String(DEV_USER_ID),
+          vk_first_name: 'Dev',
+          vk_last_name: 'User',
+        }).toString();
+        await authenticate({ vk_params });
         setState((prev) => ({ ...prev, user, ready: true, error: null }));
         return;
       }
@@ -79,19 +84,11 @@ export function useVKBridge(): BridgeState {
           photo100: userInfo.photo_100,
         };
 
-        try {
-          const launchParams = await bridge.send('VKWebAppGetLaunchParams');
-          const vk_params = new URLSearchParams(
-            Object.entries(launchParams).map(([k, v]) => [k, String(v)]),
-          ).toString();
-          await authenticate({ vk_params });
-        } catch {
-          await authenticate({
-            userId: user.userId,
-            firstName: user.firstName,
-            lastName: user.lastName,
-          });
-        }
+        const launchParams = await bridge.send('VKWebAppGetLaunchParams');
+        const vk_params = new URLSearchParams(
+          Object.entries(launchParams).map(([k, v]) => [k, String(v)]),
+        ).toString();
+        await authenticate({ vk_params });
 
         setState((prev) => ({ ...prev, user, ready: true, error: null }));
       } catch (err) {

@@ -3,14 +3,32 @@ import { BoardType } from '@prisma/client';
 import prisma from '../db';
 import { getAuthenticatedUser, requireAuth } from '../middleware/auth';
 import type { PresenceUserProfile, PresenceUserPublic } from '../../../shared/types/presence';
-import type { BoardMemberEntity, BoardWithRoleEntity } from '../../types/entities/board';
+import type { BoardEntity, BoardMemberEntity, BoardWithRoleEntity } from '../../types/entities/board';
 import type { PresenceUserRecord } from '../../types/entities/presence';
+import {
+  canManageBoardDetails,
+  canManageBoardMembers,
+  canManageBoardSettings,
+  canOpenBoard,
+  isAssignableBoardRole,
+  isBoardVisibility,
+  loadBoardContext,
+  resolveBoardRole,
+} from '../lib/boardAccess';
+import type { BoardVisibility } from '../lib/boardAccess';
 
 const router = Router();
 router.use(requireAuth);
 
 function isBoardType(value: unknown): value is BoardType {
   return Object.values(BoardType).includes(value as BoardType);
+}
+
+function toBoardWithRoleEntity(
+  board: BoardEntity,
+  myRole: BoardWithRoleEntity['myRole'],
+): BoardWithRoleEntity {
+  return { ...board, myRole };
 }
 
 const boardPresence = new Map<string, Map<number, PresenceUserRecord>>();
@@ -27,7 +45,40 @@ function getBoardPresence(boardId: string): Map<number, PresenceUserRecord> {
   return created;
 }
 
-router.put('/:id/presence', (req: Request, res: Response): void => {
+async function ensureBoardAccess(boardId: string, userId: number) {
+  const context = await loadBoardContext(boardId, userId);
+  if (!context) {
+    return null;
+  }
+
+  if (context.board.creatorId === userId && !context.membership) {
+    const role = await prisma.boardRole.upsert({
+      where: { boardId_userId: { boardId, userId } },
+      create: { boardId, userId, role: 'owner' },
+      update: { role: 'owner' },
+    });
+
+    return { ...context, role: resolveBoardRole(context.board.creatorId, userId, role.role) };
+  }
+
+  if (context.board.visibility === 'public' && !context.membership) {
+    const role = await prisma.boardRole.upsert({
+      where: { boardId_userId: { boardId, userId } },
+      create: { boardId, userId, role: 'viewer' },
+      update: {},
+    });
+
+    return { ...context, role: resolveBoardRole(context.board.creatorId, userId, role.role) };
+  }
+
+  if (canOpenBoard(context.board.visibility, context.role)) {
+    return context;
+  }
+
+  return null;
+}
+
+router.put('/:id/presence', async (req: Request, res: Response): Promise<void> => {
   const { userId } = getAuthenticatedUser(req);
   const { id } = req.params as { id: string };
   const {
@@ -35,6 +86,12 @@ router.put('/:id/presence', (req: Request, res: Response): void => {
     lastName = '',
     photo100 = '',
   } = req.body as Partial<PresenceUserProfile>;
+
+  const access = await ensureBoardAccess(id, userId);
+  if (!access) {
+    res.status(403).json({ error: 'Access denied' });
+    return;
+  }
 
   getBoardPresence(id).set(userId, {
     userId,
@@ -47,18 +104,35 @@ router.put('/:id/presence', (req: Request, res: Response): void => {
   res.status(204).send();
 });
 
-router.delete('/:id/presence', (req: Request, res: Response): void => {
+router.delete('/:id/presence', async (req: Request, res: Response): Promise<void> => {
   const { userId } = getAuthenticatedUser(req);
-  boardPresence.get(req.params.id as string)?.delete(userId);
+  const { id } = req.params as { id: string };
+
+  const access = await ensureBoardAccess(id, userId);
+  if (!access) {
+    res.status(403).json({ error: 'Access denied' });
+    return;
+  }
+
+  boardPresence.get(id)?.delete(userId);
   res.status(204).send();
 });
 
-router.get('/:id/presence', (req: Request, res: Response): void => {
+router.get('/:id/presence', async (req: Request, res: Response): Promise<void> => {
+  const { userId } = getAuthenticatedUser(req);
+  const { id } = req.params as { id: string };
+
+  const access = await ensureBoardAccess(id, userId);
+  if (!access) {
+    res.status(403).json({ error: 'Access denied' });
+    return;
+  }
+
   const now = Date.now();
-  const users: PresenceUserPublic[] = Array.from(boardPresence.get(req.params.id as string)?.values() ?? [])
+  const users: PresenceUserPublic[] = Array.from(boardPresence.get(id)?.values() ?? [])
     .filter((user) => now - user.ts < PRESENCE_TTL)
-    .map(({ userId, firstName, lastName, photo100 }) => ({
-      userId,
+    .map(({ userId: presenceUserId, firstName, lastName, photo100 }) => ({
+      userId: presenceUserId,
       firstName,
       lastName,
       photo100,
@@ -76,18 +150,32 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
     orderBy: { board: { createdAt: 'desc' } },
   });
 
-  const boards: BoardWithRoleEntity[] = roles.map((role) => ({ ...role.board, myRole: role.role }));
+  const boards: BoardWithRoleEntity[] = roles.map((role) =>
+    toBoardWithRoleEntity(
+      role.board,
+      resolveBoardRole(role.board.creatorId, userId, role.role) ?? 'viewer',
+    ),
+  );
+
   res.json(boards);
 });
 
 router.post('/', async (req: Request, res: Response): Promise<void> => {
   const { userId } = getAuthenticatedUser(req);
-  const { title, description, chatId, coverImage, boardType } = req.body as {
+  const {
+    title,
+    description,
+    chatId,
+    coverImage,
+    boardType,
+    visibility,
+  } = req.body as {
     title?: string;
     description?: string;
     chatId?: string;
     coverImage?: string;
     boardType?: string;
+    visibility?: string;
   };
 
   if (!title?.trim()) {
@@ -96,6 +184,7 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
   }
 
   const resolvedType: BoardType = isBoardType(boardType) ? boardType : 'kanban';
+  const resolvedVisibility = isBoardVisibility(visibility) ? visibility : 'private';
 
   const board = await prisma.board.create({
     data: {
@@ -103,52 +192,91 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
       description: description?.trim() ?? null,
       coverImage: coverImage?.trim() || null,
       boardType: resolvedType,
+      visibility: resolvedVisibility,
       chatId: chatId ?? null,
       creatorId: userId,
       roles: {
-        create: { userId, role: 'admin' },
+        create: { userId, role: 'owner' },
       },
     },
   });
 
-  res.status(201).json({ ...board, myRole: 'admin' } as BoardWithRoleEntity);
+  res.status(201).json(toBoardWithRoleEntity(board, 'owner'));
 });
 
 router.get('/:id', async (req: Request, res: Response): Promise<void> => {
   const { userId } = getAuthenticatedUser(req);
   const { id } = req.params as { id: string };
 
-  const board = await prisma.board.findUnique({ where: { id } });
-  if (!board) {
+  const context = await loadBoardContext(id, userId);
+  if (!context) {
     res.status(404).json({ error: 'Board not found' });
     return;
   }
 
-  const role = await prisma.boardRole.upsert({
-    where: { boardId_userId: { boardId: id, userId } },
-    create: { boardId: id, userId, role: 'member' },
-    update: {},
-  });
+  if (!canOpenBoard(context.board.visibility, context.role)) {
+    res.status(403).json({ error: 'Access denied' });
+    return;
+  }
 
-  res.json({ ...board, myRole: role.role } as BoardWithRoleEntity);
+  let role = context.role;
+  if (!role) {
+    const membership = await prisma.boardRole.upsert({
+      where: { boardId_userId: { boardId: id, userId } },
+      create: { boardId: id, userId, role: 'viewer' },
+      update: {},
+    });
+
+    role = resolveBoardRole(context.board.creatorId, userId, membership.role) ?? 'viewer';
+  } else if (role === 'owner' && !context.membership) {
+    await prisma.boardRole.upsert({
+      where: { boardId_userId: { boardId: id, userId } },
+      create: { boardId: id, userId, role: 'owner' },
+      update: { role: 'owner' },
+    });
+  }
+
+  res.json(toBoardWithRoleEntity(context.board, role));
 });
 
 router.patch('/:id', async (req: Request, res: Response): Promise<void> => {
   const { userId } = getAuthenticatedUser(req);
   const { id } = req.params as { id: string };
-  const { title, description, coverImage, boardType } = req.body as {
+  const {
+    title,
+    description,
+    coverImage,
+    boardType,
+    visibility,
+  } = req.body as {
     title?: string;
     description?: string;
     coverImage?: string;
     boardType?: string;
+    visibility?: string;
   };
 
-  const role = await prisma.boardRole.findUnique({
-    where: { boardId_userId: { boardId: id, userId } },
-  });
+  const context = await loadBoardContext(id, userId);
+  if (!context) {
+    res.status(404).json({ error: 'Board not found' });
+    return;
+  }
 
-  if (!role || role.role !== 'admin') {
-    res.status(403).json({ error: 'Only admins can update the board' });
+  const canEditBoardDetails = canManageBoardDetails(context.role);
+  const wantsVisibilityChange = visibility !== undefined;
+  const wantsBoardDetailsChange =
+    title !== undefined ||
+    description !== undefined ||
+    coverImage !== undefined ||
+    boardType !== undefined;
+
+  if (wantsBoardDetailsChange && !canEditBoardDetails) {
+    res.status(403).json({ error: 'Only the board owner or admin can update the board' });
+    return;
+  }
+
+  if (wantsVisibilityChange && !canManageBoardSettings(context.role)) {
+    res.status(403).json({ error: 'Only the board owner can change board visibility' });
     return;
   }
 
@@ -157,6 +285,7 @@ router.patch('/:id', async (req: Request, res: Response): Promise<void> => {
     description?: string | null;
     coverImage?: string | null;
     boardType?: BoardType;
+    visibility?: BoardVisibility;
   };
 
   const data: BoardUpdatePayload = {};
@@ -177,37 +306,200 @@ router.patch('/:id', async (req: Request, res: Response): Promise<void> => {
     data.coverImage = coverImage.trim() || null;
   }
 
-  if (boardType !== undefined && isBoardType(boardType)) {
+  if (boardType !== undefined) {
+    if (!isBoardType(boardType)) {
+      res.status(400).json({ error: 'Invalid boardType' });
+      return;
+    }
+
     data.boardType = boardType;
   }
 
+  if (visibility !== undefined) {
+    if (!isBoardVisibility(visibility)) {
+      res.status(400).json({ error: 'Invalid visibility' });
+      return;
+    }
+
+    data.visibility = visibility;
+  }
+
   const board = await prisma.board.update({ where: { id }, data });
-  res.json({ ...board, myRole: role.role });
+  res.json(toBoardWithRoleEntity(board, context.role ?? 'owner'));
 });
 
 router.get('/:id/members', async (req: Request, res: Response): Promise<void> => {
+  const { userId } = getAuthenticatedUser(req);
   const { id } = req.params as { id: string };
+
+  const context = await loadBoardContext(id, userId);
+  if (!context) {
+    res.status(404).json({ error: 'Board not found' });
+    return;
+  }
+
+  if (!canOpenBoard(context.board.visibility, context.role)) {
+    res.status(403).json({ error: 'Access denied' });
+    return;
+  }
+
   const roles = await prisma.boardRole.findMany({
     where: { boardId: id },
     select: { userId: true, role: true },
   });
 
-  const members: BoardMemberEntity[] = roles;
+  const members: BoardMemberEntity[] = roles.map((role) => ({
+    userId: role.userId,
+    role: resolveBoardRole(context.board.creatorId, role.userId, role.role) ?? 'viewer',
+  }));
+
   res.json(members);
+});
+
+router.post('/:id/members', async (req: Request, res: Response): Promise<void> => {
+  const { userId } = getAuthenticatedUser(req);
+  const { id } = req.params as { id: string };
+  const { userId: targetUserIdRaw, role } = req.body as {
+    userId?: number;
+    role?: string;
+  };
+  const targetUserId = Number(targetUserIdRaw);
+
+  const context = await loadBoardContext(id, userId);
+  if (!context) {
+    res.status(404).json({ error: 'Board not found' });
+    return;
+  }
+
+  if (!canManageBoardMembers(context.role)) {
+    res.status(403).json({ error: 'Only the board owner or admin can manage members' });
+    return;
+  }
+
+  if (!Number.isInteger(targetUserId)) {
+    res.status(400).json({ error: 'userId is required' });
+    return;
+  }
+
+  if (!isAssignableBoardRole(role)) {
+    res.status(400).json({ error: 'Invalid role' });
+    return;
+  }
+
+  if (targetUserId === userId || targetUserId === context.board.creatorId) {
+    res.status(403).json({ error: 'Owner cannot be changed' });
+    return;
+  }
+
+  const boardRole = await prisma.boardRole.upsert({
+    where: { boardId_userId: { boardId: id, userId: targetUserId } },
+    create: { boardId: id, userId: targetUserId, role },
+    update: { role },
+  });
+
+  res.status(201).json({
+    userId: boardRole.userId,
+    role: resolveBoardRole(context.board.creatorId, boardRole.userId, boardRole.role) ?? boardRole.role,
+  });
+});
+
+router.patch('/:id/members/:userId', async (req: Request, res: Response): Promise<void> => {
+  const { userId } = getAuthenticatedUser(req);
+  const { id, userId: targetUserIdRaw } = req.params as { id: string; userId: string };
+  const targetUserId = Number(targetUserIdRaw);
+  const { role } = req.body as { role?: string };
+
+  const context = await loadBoardContext(id, userId);
+  if (!context) {
+    res.status(404).json({ error: 'Board not found' });
+    return;
+  }
+
+  if (!canManageBoardMembers(context.role)) {
+    res.status(403).json({ error: 'Only the board owner or admin can manage members' });
+    return;
+  }
+
+  if (!Number.isInteger(targetUserId)) {
+    res.status(400).json({ error: 'Invalid userId' });
+    return;
+  }
+
+  if (!isAssignableBoardRole(role)) {
+    res.status(400).json({ error: 'Invalid role' });
+    return;
+  }
+
+  if (targetUserId === context.board.creatorId || targetUserId === userId) {
+    res.status(403).json({ error: 'Owner cannot be changed' });
+    return;
+  }
+
+  const existing = await prisma.boardRole.findUnique({
+    where: { boardId_userId: { boardId: id, userId: targetUserId } },
+  });
+
+  if (!existing) {
+    res.status(404).json({ error: 'Member not found' });
+    return;
+  }
+
+  const boardRole = await prisma.boardRole.update({
+    where: { boardId_userId: { boardId: id, userId: targetUserId } },
+    data: { role },
+  });
+
+  res.json({
+    userId: boardRole.userId,
+    role: resolveBoardRole(context.board.creatorId, boardRole.userId, boardRole.role) ?? boardRole.role,
+  });
+});
+
+router.delete('/:id/members/:userId', async (req: Request, res: Response): Promise<void> => {
+  const { userId } = getAuthenticatedUser(req);
+  const { id, userId: targetUserIdRaw } = req.params as { id: string; userId: string };
+  const targetUserId = Number(targetUserIdRaw);
+
+  const context = await loadBoardContext(id, userId);
+  if (!context) {
+    res.status(404).json({ error: 'Board not found' });
+    return;
+  }
+
+  if (!canManageBoardMembers(context.role)) {
+    res.status(403).json({ error: 'Only the board owner or admin can manage members' });
+    return;
+  }
+
+  if (!Number.isInteger(targetUserId)) {
+    res.status(400).json({ error: 'Invalid userId' });
+    return;
+  }
+
+  if (targetUserId === context.board.creatorId || targetUserId === userId) {
+    res.status(403).json({ error: 'Owner cannot be changed' });
+    return;
+  }
+
+  await prisma.boardRole.deleteMany({
+    where: { boardId: id, userId: targetUserId },
+  });
+
+  res.status(204).send();
 });
 
 router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
   const { userId } = getAuthenticatedUser(req);
   const { id } = req.params as { id: string };
 
-  const board = await prisma.board.findUnique({ where: { id } });
-  if (!board) {
+  const context = await loadBoardContext(id, userId);
+  if (!context) {
     res.status(404).json({ error: 'Board not found' });
     return;
   }
 
-  if (board.creatorId !== userId) {
-    res.status(403).json({ error: 'Only the board creator can delete it' });
+  if (!canManageBoardSettings(context.role)) {
+    res.status(403).json({ error: 'Only the board owner can delete it' });
     return;
   }
 

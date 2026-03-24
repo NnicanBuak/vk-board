@@ -3,15 +3,23 @@ import prisma from '../db';
 import { requireAuth, requireUser } from '../middleware/auth';
 import type { TagAssignResponse } from '../../../shared/types/tag';
 import type { TagEntity } from '../../types/entities/tag';
+import { canEditBoard, canManageBoard, canOpenBoard, loadBoardContext } from '../lib/boardAccess';
 
 const router = Router();
 router.use(requireAuth);
 
-async function getRole(boardId: string, userId: number) {
-  const entry = await prisma.boardRole.findUnique({
-    where: { boardId_userId: { boardId, userId } },
-  });
-  return entry?.role ?? null;
+async function getCardContext(cardId: string, userId: number) {
+  const card = await prisma.card.findUnique({ where: { id: cardId } });
+  if (!card) {
+    return null;
+  }
+
+  const context = await loadBoardContext(card.boardId, userId);
+  if (!context) {
+    return null;
+  }
+
+  return { card, ...context };
 }
 
 // GET /api/tags?boardId=
@@ -22,10 +30,21 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
   const userId = user.userId;
   const { boardId } = req.query as { boardId?: string };
 
-  if (!boardId) { res.status(400).json({ error: 'boardId is required' }); return; }
+  if (!boardId) {
+    res.status(400).json({ error: 'boardId is required' });
+    return;
+  }
 
-  const role = await getRole(boardId, userId);
-  if (!role) { res.status(403).json({ error: 'Access denied' }); return; }
+  const context = await loadBoardContext(boardId, userId);
+  if (!context) {
+    res.status(404).json({ error: 'Board not found' });
+    return;
+  }
+
+  if (!canOpenBoard(context.board.visibility, context.role)) {
+    res.status(403).json({ error: 'Access denied' });
+    return;
+  }
 
   const tags: TagEntity[] = await prisma.tag.findMany({
     where: { boardId },
@@ -35,7 +54,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
   res.json(tags);
 });
 
-// POST /api/tags — admin creates a tag on the board
+// POST /api/tags — board manager creates a tag on the board
 router.post('/', async (req: Request, res: Response): Promise<void> => {
   const user = requireUser(req, res);
   if (!user) return;
@@ -48,8 +67,16 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
     return;
   }
 
-  const role = await getRole(boardId, userId);
-  if (role !== 'admin') { res.status(403).json({ error: 'Admin only' }); return; }
+  const context = await loadBoardContext(boardId, userId);
+  if (!context) {
+    res.status(404).json({ error: 'Board not found' });
+    return;
+  }
+
+  if (!canManageBoard(context.role)) {
+    res.status(403).json({ error: 'Only board owners and admins can manage tags' });
+    return;
+  }
 
   const tag: TagEntity = await prisma.tag.upsert({
     where: { boardId_name: { boardId, name: name.trim() } },
@@ -60,7 +87,7 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
   res.status(201).json(tag);
 });
 
-// DELETE /api/tags/:id — admin only
+// DELETE /api/tags/:id — board manager only
 router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
   const user = requireUser(req, res);
   if (!user) return;
@@ -69,10 +96,21 @@ router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params as { id: string };
 
   const tag = await prisma.tag.findUnique({ where: { id } });
-  if (!tag) { res.status(404).json({ error: 'Tag not found' }); return; }
+  if (!tag) {
+    res.status(404).json({ error: 'Tag not found' });
+    return;
+  }
 
-  const role = await getRole(tag.boardId, userId);
-  if (role !== 'admin') { res.status(403).json({ error: 'Admin only' }); return; }
+  const context = await loadBoardContext(tag.boardId, userId);
+  if (!context) {
+    res.status(404).json({ error: 'Board not found' });
+    return;
+  }
+
+  if (!canManageBoard(context.role)) {
+    res.status(403).json({ error: 'Only board owners and admins can manage tags' });
+    return;
+  }
 
   await prisma.tag.delete({ where: { id } });
   res.status(204).send();
@@ -91,11 +129,21 @@ router.post('/assign', async (req: Request, res: Response): Promise<void> => {
     return;
   }
 
-  const card = await prisma.card.findUnique({ where: { id: cardId } });
-  if (!card) { res.status(404).json({ error: 'Card not found' }); return; }
+  const context = await getCardContext(cardId, userId);
+  if (!context) {
+    res.status(404).json({ error: 'Card not found' });
+    return;
+  }
 
-  const role = await getRole(card.boardId, userId);
-  if (!role) { res.status(403).json({ error: 'Access denied' }); return; }
+  if (!canOpenBoard(context.board.visibility, context.role)) {
+    res.status(403).json({ error: 'Access denied' });
+    return;
+  }
+
+  if (!canEditBoard(context.role) && context.card.authorId !== userId) {
+    res.status(403).json({ error: 'Access denied' });
+    return;
+  }
 
   await prisma.cardTag.upsert({
     where: { cardId_tagId: { cardId, tagId } },
@@ -120,11 +168,21 @@ router.delete('/assign', async (req: Request, res: Response): Promise<void> => {
     return;
   }
 
-  const card = await prisma.card.findUnique({ where: { id: cardId } });
-  if (!card) { res.status(404).json({ error: 'Card not found' }); return; }
+  const context = await getCardContext(cardId, userId);
+  if (!context) {
+    res.status(404).json({ error: 'Card not found' });
+    return;
+  }
 
-  const role = await getRole(card.boardId, userId);
-  if (!role) { res.status(403).json({ error: 'Access denied' }); return; }
+  if (!canOpenBoard(context.board.visibility, context.role)) {
+    res.status(403).json({ error: 'Access denied' });
+    return;
+  }
+
+  if (!canEditBoard(context.role) && context.card.authorId !== userId) {
+    res.status(403).json({ error: 'Access denied' });
+    return;
+  }
 
   await prisma.cardTag.deleteMany({ where: { cardId, tagId } });
   res.status(204).send();

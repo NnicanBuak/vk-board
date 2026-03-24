@@ -55,6 +55,7 @@ import { uploadImage } from '../api/uploads';
 import { usePresence } from '../hooks/usePresence';
 import type { Card, Tag } from '../types/card';
 import { BOARD_TYPE_LABELS, BOARD_TYPE_THEMES } from '../constants/boardTypes';
+import type { BoardMemberDto } from '../../shared/types/board';
 
 const AVATAR_COLORS = ['#e53935', '#8e24aa', '#1e88e5', '#00897b', '#f4511e', '#33b679', '#fb8c00', '#6d4c41'];
 function memberColor(userId: number) { return AVATAR_COLORS[userId % AVATAR_COLORS.length]; }
@@ -109,7 +110,7 @@ export function BoardPanel({ id }: Props) {
 
   const [showDeleteAlert, setShowDeleteAlert] = useState(false);
   const [boardTags, setBoardTags] = useState<Tag[]>([]);
-  const [boardMembers, setBoardMembers] = useState<{ userId: number; role: string }[]>([]);
+  const [boardMembers, setBoardMembers] = useState<BoardMemberDto[]>([]);
   const [viewersOpen, setViewersOpen] = useState(false);
   const viewersBtnRef = useRef<HTMLDivElement>(null);
   const actionsSheetToggleRef = useRef<HTMLButtonElement | null>(null);
@@ -121,8 +122,12 @@ export function BoardPanel({ id }: Props) {
   const { cards, loading: cardsLoading, error: cardsError, refresh: refreshCards, addCard, updateCard, removeCard, toggleLike } = useCards(boardId, 'date');
   const { columns, loading: columnsLoading, refresh: refreshColumns, addColumn, renameColumn } = useColumns(boardId);
 
-  const isAdmin = board?.myRole === 'admin' || board?.myRole === 'owner';
-  const canEdit = isAdmin || board?.myRole === 'editor';
+  const isOwner = board?.myRole === 'owner';
+  const isAdmin = board?.myRole === 'admin';
+  const isBoardManager = isOwner || isAdmin;
+  const canManageBoardActions = isBoardManager;
+  const canEdit = isBoardManager || board?.myRole === 'editor';
+  const canManageBoardSettings = isOwner;
   const loading = boardLoading || cardsLoading || columnsLoading;
   const error = boardError ?? cardsError;
 
@@ -326,10 +331,10 @@ export function BoardPanel({ id }: Props) {
   }, [boardType, activeModal]);
 
   useEffect(() => {
-    if (!isAdmin && actionsSheetOpen) {
+    if (!canManageBoardActions && actionsSheetOpen) {
       setActionsSheetOpen(false);
     }
-  }, [isAdmin, actionsSheetOpen]);
+  }, [canManageBoardActions, actionsSheetOpen]);
 
   useEffect(() => {
     return () => {
@@ -612,7 +617,7 @@ export function BoardPanel({ id }: Props) {
             <PanelHeaderButton onClick={handleCopyLink} aria-label="Скопировать ссылку">
               <Icon24LinkedOutline />
             </PanelHeaderButton>
-            {isAdmin && (
+            {canManageBoardActions && (
               <PanelHeaderButton
                 onClick={openActionsSheet}
                 aria-label="Действия с доской"
@@ -662,7 +667,7 @@ export function BoardPanel({ id }: Props) {
               <KanbanBoard
                 cards={cards}
                 columns={columns}
-                isAdmin={isAdmin}
+                isAdmin={isBoardManager}
                 canEdit={canEdit}
                 userId={userId}
                 addCard={addCard}
@@ -699,7 +704,7 @@ export function BoardPanel({ id }: Props) {
         )}
       </PullToRefresh>
 
-      {isAdmin && actionsSheetOpen && (
+      {canManageBoardActions && actionsSheetOpen && (
         <ActionSheet
           className="board-actions-sheet"
           iosCloseItem={null}
@@ -718,9 +723,11 @@ export function BoardPanel({ id }: Props) {
           <ActionSheetItem onClick={runFromActionsSheet(handleOpenAccessSettings)}>
             Настройки доступа
           </ActionSheetItem>
-          <ActionSheetItem mode="destructive" onClick={runFromActionsSheet(handleAskDelete)}>
-            Удалить доску
-          </ActionSheetItem>
+          {canManageBoardSettings && (
+            <ActionSheetItem mode="destructive" onClick={runFromActionsSheet(handleAskDelete)}>
+              Удалить доску
+            </ActionSheetItem>
+          )}
         </ActionSheet>
       )}
 
@@ -744,16 +751,16 @@ export function BoardPanel({ id }: Props) {
 
       {/* Card detail (kanban + brainstorm) */}
       {selectedCard && (
-        <CardDetailModal
-          card={selectedCard}
-          columns={columns}
-          boardTags={boardTags}
-          boardMembers={boardMembers}
-          currentUserId={userId}
-          isAdmin={isAdmin}
-          canEdit={canEdit}
-          onClose={() => setSelectedCard(null)}
-          onLike={() => toggleLike(selectedCard.id, userId)}
+          <CardDetailModal
+            card={selectedCard}
+            columns={columns}
+            boardTags={boardTags}
+            boardMembers={boardMembers}
+            currentUserId={userId}
+            isAdmin={isBoardManager}
+            canEdit={canEdit}
+            onClose={() => setSelectedCard(null)}
+            onLike={() => toggleLike(selectedCard.id, userId)}
           onMoveColumn={(columnId) => updateCard(selectedCard.id, { columnId })}
           onDelete={() => handleDeleteCard(selectedCard.id)}
           onUpdate={async (data) => { await updateCard(selectedCard.id, data); }}

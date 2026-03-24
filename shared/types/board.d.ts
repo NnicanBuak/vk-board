@@ -1,4 +1,4 @@
-export type BoardRole = 'owner' | 'editor' | 'viewer';
+export type BoardRole = 'owner' | 'admin' | 'editor' | 'viewer';
 export type BoardType = 'kanban' | 'brainstorm' | 'notes';
 export type BoardVisibility = 'public' | 'private';
 
@@ -8,6 +8,7 @@ export interface BoardDto {
   description: string | null;
   coverImage: string | null;
   boardType: BoardType;
+  visibility: BoardVisibility;
   chatId: string | null;
   creatorId: number;
   createdAt: string;
@@ -25,6 +26,7 @@ export interface BoardCreateInput {
   chatId?: string;
   coverImage?: string;
   boardType?: BoardType;
+  visibility?: BoardVisibility;
 }
 
 export interface BoardUpdateInput {

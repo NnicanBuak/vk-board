@@ -1,8 +1,5 @@
 export interface AuthRequest {
-  vk_params?: string;
-  userId?: number;
-  firstName?: string;
-  lastName?: string;
+  vk_params: string;
 }
 
 export interface AuthResponse {

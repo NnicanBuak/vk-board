@@ -3,6 +3,7 @@ import type {
   BoardCreateInput,
   BoardDto,
   BoardMemberDto,
+  BoardRole,
   BoardUpdateInput,
 } from '../../shared/types/board';
 
@@ -21,10 +22,10 @@ export const boardsApi = {
 
   members: (id: string) => api.get<BoardMemberDto[]>(`/boards/${id}/members`),
 
-  addMember: (id: string, userId: number, role: string) =>
+  addMember: (id: string, userId: number, role: BoardRole) =>
     api.post<BoardMemberDto>(`/boards/${id}/members`, { userId, role }),
 
-  updateMember: (id: string, userId: number, role: string) =>
+  updateMember: (id: string, userId: number, role: BoardRole) =>
     api.patch<BoardMemberDto>(`/boards/${id}/members/${userId}`, { role }),
 
   removeMember: (id: string, userId: number) =>

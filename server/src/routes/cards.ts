@@ -3,15 +3,23 @@ import type { Prisma } from '@prisma/client';
 import prisma from '../db';
 import { requireAuth, requireUser } from '../middleware/auth';
 import type { CardWithMetaEntity } from '../../types/entities/card';
+import { canEditBoard, canManageBoard, canOpenBoard, loadBoardContext } from '../lib/boardAccess';
 
 const router = Router();
 router.use(requireAuth);
 
-async function getRole(boardId: string, userId: number) {
-  const entry = await prisma.boardRole.findUnique({
-    where: { boardId_userId: { boardId, userId } },
-  });
-  return entry?.role ?? null;
+async function getCardContext(cardId: string, userId: number) {
+  const card = await prisma.card.findUnique({ where: { id: cardId } });
+  if (!card) {
+    return null;
+  }
+
+  const context = await loadBoardContext(card.boardId, userId);
+  if (!context) {
+    return null;
+  }
+
+  return { ...context, card };
 }
 
 const cardInclude = {
@@ -43,10 +51,21 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
     columnId?: string;
   };
 
-  if (!boardId) { res.status(400).json({ error: 'boardId is required' }); return; }
+  if (!boardId) {
+    res.status(400).json({ error: 'boardId is required' });
+    return;
+  }
 
-  const role = await getRole(boardId, userId);
-  if (!role) { res.status(403).json({ error: 'Access denied' }); return; }
+  const context = await loadBoardContext(boardId, userId);
+  if (!context) {
+    res.status(404).json({ error: 'Board not found' });
+    return;
+  }
+
+  if (!canOpenBoard(context.board.visibility, context.role)) {
+    res.status(403).json({ error: 'Access denied' });
+    return;
+  }
 
   const cards = await prisma.card.findMany({
     where: {
@@ -86,8 +105,16 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
     return;
   }
 
-  const role = await getRole(boardId, userId);
-  if (!role) { res.status(403).json({ error: 'Access denied' }); return; }
+  const context = await loadBoardContext(boardId, userId);
+  if (!context) {
+    res.status(404).json({ error: 'Board not found' });
+    return;
+  }
+
+  if (!canEditBoard(context.role)) {
+    res.status(403).json({ error: 'Access denied' });
+    return;
+  }
 
   const last = await prisma.card.findFirst({
     where: { boardId, columnId: columnId ?? null },
@@ -128,16 +155,22 @@ router.patch('/:id', async (req: Request, res: Response): Promise<void> => {
     order?: number;
   };
 
-  const card = await prisma.card.findUnique({ where: { id } });
-  if (!card) { res.status(404).json({ error: 'Card not found' }); return; }
+  const context = await getCardContext(id, userId);
+  if (!context) {
+    res.status(404).json({ error: 'Card not found' });
+    return;
+  }
 
-  const role = await getRole(card.boardId, userId);
-  const isAuthor = card.authorId === userId;
-  const isAdmin = role === 'admin';
+  const isAuthor = context.card.authorId === userId;
+  const canEditCard = isAuthor || canEditBoard(context.role);
 
-  if (!isAuthor && !isAdmin) { res.status(403).json({ error: 'Access denied' }); return; }
-  if (status !== undefined && !isAdmin) {
-    res.status(403).json({ error: 'Only admin can change card status' });
+  if (!canEditCard) {
+    res.status(403).json({ error: 'Access denied' });
+    return;
+  }
+
+  if (status !== undefined && !canManageBoard(context.role)) {
+    res.status(403).json({ error: 'Only board owners and admins can change card status' });
     return;
   }
 
@@ -149,7 +182,7 @@ router.patch('/:id', async (req: Request, res: Response): Promise<void> => {
       ...(url !== undefined && { url: url.trim() || null }),
       ...(imageUrl !== undefined && { imageUrl: imageUrl.trim() || null }),
       ...(status !== undefined && { status }),
-      ...(columnId !== undefined && { columnId: columnId }),
+      ...(columnId !== undefined && { columnId }),
       ...(order !== undefined && { order }),
     },
     include: cardInclude,
@@ -166,11 +199,13 @@ router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
   const userId = user.userId;
   const { id } = req.params as { id: string };
 
-  const card = await prisma.card.findUnique({ where: { id } });
-  if (!card) { res.status(404).json({ error: 'Card not found' }); return; }
+  const context = await getCardContext(id, userId);
+  if (!context) {
+    res.status(404).json({ error: 'Card not found' });
+    return;
+  }
 
-  const role = await getRole(card.boardId, userId);
-  if (card.authorId !== userId && role !== 'admin') {
+  if (context.card.authorId !== userId && !canManageBoard(context.role)) {
     res.status(403).json({ error: 'Access denied' });
     return;
   }

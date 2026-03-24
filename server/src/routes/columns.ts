@@ -2,16 +2,10 @@ import { Router, Request, Response } from 'express';
 import prisma from '../db';
 import { requireAuth, requireUser } from '../middleware/auth';
 import type { ColumnEntity } from '../../types/entities/column';
+import { canManageBoard, canOpenBoard, loadBoardContext } from '../lib/boardAccess';
 
 const router = Router();
 router.use(requireAuth);
-
-async function getRole(boardId: string, userId: number) {
-  const entry = await prisma.boardRole.findUnique({
-    where: { boardId_userId: { boardId, userId } },
-  });
-  return entry?.role ?? null;
-}
 
 // GET /api/columns?boardId=
 router.get('/', async (req: Request, res: Response): Promise<void> => {
@@ -21,10 +15,21 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
   const userId = user.userId;
   const { boardId } = req.query as { boardId?: string };
 
-  if (!boardId) { res.status(400).json({ error: 'boardId is required' }); return; }
+  if (!boardId) {
+    res.status(400).json({ error: 'boardId is required' });
+    return;
+  }
 
-  const role = await getRole(boardId, userId);
-  if (!role) { res.status(403).json({ error: 'Access denied' }); return; }
+  const context = await loadBoardContext(boardId, userId);
+  if (!context) {
+    res.status(404).json({ error: 'Board not found' });
+    return;
+  }
+
+  if (!canOpenBoard(context.board.visibility, context.role)) {
+    res.status(403).json({ error: 'Access denied' });
+    return;
+  }
 
   const columns: ColumnEntity[] = await prisma.column.findMany({
     where: { boardId },
@@ -34,7 +39,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
   res.json(columns);
 });
 
-// POST /api/columns — admin only
+// POST /api/columns — board manager only
 router.post('/', async (req: Request, res: Response): Promise<void> => {
   const user = requireUser(req, res);
   if (!user) return;
@@ -47,8 +52,16 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
     return;
   }
 
-  const role = await getRole(boardId, userId);
-  if (role !== 'admin') { res.status(403).json({ error: 'Admin only' }); return; }
+  const context = await loadBoardContext(boardId, userId);
+  if (!context) {
+    res.status(404).json({ error: 'Board not found' });
+    return;
+  }
+
+  if (!canManageBoard(context.role)) {
+    res.status(403).json({ error: 'Only board owners and admins can manage columns' });
+    return;
+  }
 
   const last = await prisma.column.findFirst({
     where: { boardId },
@@ -62,7 +75,7 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
   res.status(201).json(column);
 });
 
-// PATCH /api/columns/:id — rename or reorder (admin only)
+// PATCH /api/columns/:id — rename or reorder (board manager only)
 router.patch('/:id', async (req: Request, res: Response): Promise<void> => {
   const user = requireUser(req, res);
   if (!user) return;
@@ -72,10 +85,21 @@ router.patch('/:id', async (req: Request, res: Response): Promise<void> => {
   const { title, order } = req.body as { title?: string; order?: number };
 
   const column = await prisma.column.findUnique({ where: { id } });
-  if (!column) { res.status(404).json({ error: 'Column not found' }); return; }
+  if (!column) {
+    res.status(404).json({ error: 'Column not found' });
+    return;
+  }
 
-  const role = await getRole(column.boardId, userId);
-  if (role !== 'admin') { res.status(403).json({ error: 'Admin only' }); return; }
+  const context = await loadBoardContext(column.boardId, userId);
+  if (!context) {
+    res.status(404).json({ error: 'Board not found' });
+    return;
+  }
+
+  if (!canManageBoard(context.role)) {
+    res.status(403).json({ error: 'Only board owners and admins can manage columns' });
+    return;
+  }
 
   const updated: ColumnEntity = await prisma.column.update({
     where: { id },
@@ -88,7 +112,7 @@ router.patch('/:id', async (req: Request, res: Response): Promise<void> => {
   res.json(updated);
 });
 
-// DELETE /api/columns/:id — admin only, cards move to null column
+// DELETE /api/columns/:id — board manager only, cards move to null column
 router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
   const user = requireUser(req, res);
   if (!user) return;
@@ -97,10 +121,21 @@ router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params as { id: string };
 
   const column = await prisma.column.findUnique({ where: { id } });
-  if (!column) { res.status(404).json({ error: 'Column not found' }); return; }
+  if (!column) {
+    res.status(404).json({ error: 'Column not found' });
+    return;
+  }
 
-  const role = await getRole(column.boardId, userId);
-  if (role !== 'admin') { res.status(403).json({ error: 'Admin only' }); return; }
+  const context = await loadBoardContext(column.boardId, userId);
+  if (!context) {
+    res.status(404).json({ error: 'Board not found' });
+    return;
+  }
+
+  if (!canManageBoard(context.role)) {
+    res.status(403).json({ error: 'Only board owners and admins can manage columns' });
+    return;
+  }
 
   await prisma.column.delete({ where: { id } });
   res.status(204).send();

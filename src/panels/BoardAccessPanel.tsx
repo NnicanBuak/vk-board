@@ -29,20 +29,19 @@ import { boardsApi } from '../api/boards';
 import { useBoardDetail } from '../hooks/useBoardDetail';
 import { useUser } from '../store/userState';
 import type { BoardVisibility } from '../types/board';
+import type { BoardMemberDto, BoardRole } from '../../shared/types/board';
 import { resolveVKGroupId } from '../bridge/vkGroupId';
 
 const VK_APP_ID = Number(import.meta.env.VITE_VK_APP_ID ?? 0);
 
-const ROLE_LABELS: Record<string, string> = {
+const ROLE_LABELS: Record<BoardRole, string> = {
   owner: 'Владелец',
   admin: 'Администратор',
   editor: 'Редактор',
   viewer: 'Читатель',
-  member: 'Участник',
 };
 
-// Admin role is never assigned manually — it comes from VK chat/community admin status.
-const ASSIGNABLE_ROLES = [
+const ASSIGNABLE_ROLES: Array<{ value: Extract<BoardRole, 'editor' | 'viewer'>; label: string }> = [
   { value: 'editor', label: 'Редактор' },
   { value: 'viewer', label: 'Читатель' },
 ];
@@ -70,7 +69,7 @@ export function BoardAccessPanel({ id }: Props) {
   const [visibility, setVisibility] = useState<BoardVisibility>('private');
   useEffect(() => { if (board?.visibility) setVisibility(board.visibility); }, [board?.visibility]);
 
-  const [members, setMembers] = useState<{ userId: number; role: string }[]>([]);
+  const [members, setMembers] = useState<BoardMemberDto[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(true);
   const [snackbar, setSnackbar] = useState<string | null>(null);
   const [savingVisibility, setSavingVisibility] = useState(false);
@@ -82,11 +81,14 @@ export function BoardAccessPanel({ id }: Props) {
   const [candidatesError, setCandidatesError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
-  const [inviteRole, setInviteRole] = useState('editor');
+  const [inviteRole, setInviteRole] = useState<Extract<BoardRole, 'editor' | 'viewer'>>('editor');
   const [inviting, setInviting] = useState(false);
   const [communityGroupId, setCommunityGroupId] = useState<number | null>(null);
 
-  const isAdmin = board?.myRole === 'admin' || board?.myRole === 'owner';
+  const isOwner = board?.myRole === 'owner';
+  const isAdmin = board?.myRole === 'admin';
+  const canManageAccess = isOwner || isAdmin;
+  const canManageVisibility = isOwner;
 
   // Board context: chat / community / personal
   const boardContext = board
@@ -232,7 +234,7 @@ export function BoardAccessPanel({ id }: Props) {
     if (!selectedIds.length) return;
     setInviting(true);
     try {
-      const added: { userId: number; role: string }[] = [];
+      const added: BoardMemberDto[] = [];
       for (const uid of selectedIds) {
         const member = await boardsApi.addMember(boardId, uid, inviteRole);
         added.push(member);
@@ -266,7 +268,7 @@ export function BoardAccessPanel({ id }: Props) {
     }
   };
 
-  const handleRoleChange = async (userId: number, role: string) => {
+  const handleRoleChange = async (userId: number, role: BoardRole) => {
     try {
       const updated = await boardsApi.updateMember(boardId, userId, role);
       setMembers((prev) => prev.map((m) => m.userId === userId ? updated : m));
@@ -300,7 +302,7 @@ export function BoardAccessPanel({ id }: Props) {
           <SegmentedControl
             size="m"
             value={visibility}
-            onChange={(v) => isAdmin && handleVisibilityToggle(v as BoardVisibility)}
+            onChange={(v) => canManageVisibility && handleVisibilityToggle(v as BoardVisibility)}
             options={[
               { label: '🌐 По ссылке', value: 'public' },
               { label: '🔒 Приватная', value: 'private' },
@@ -320,9 +322,8 @@ export function BoardAccessPanel({ id }: Props) {
       </Header>}>
         {members.map((m) => {
           const isMe = m.userId === user?.userId;
-          const isProtected = m.role === 'owner' || m.role === 'admin' || isMe;
-          // Can change role only if: I'm admin/owner, the member isn't protected, and board isn't personal (admins come from VK context on chat/community boards)
-          const canChangeRole = isAdmin && !isProtected && boardContext !== 'personal';
+          const isProtected = m.role === 'owner' || isMe;
+          const canChangeRole = canManageAccess && !isProtected && boardContext !== 'personal';
           return (
             <Cell
               key={m.userId}
@@ -331,7 +332,7 @@ export function BoardAccessPanel({ id }: Props) {
                 canChangeRole ? (
                   <CustomSelect
                     value={m.role}
-                    onChange={(e) => handleRoleChange(m.userId, e.target.value)}
+                    onChange={(e) => handleRoleChange(m.userId, e.target.value as BoardRole)}
                     options={ASSIGNABLE_ROLES}
                     style={{ marginTop: 4, minWidth: 150 }}
                   />
@@ -340,7 +341,7 @@ export function BoardAccessPanel({ id }: Props) {
                 )
               }
               after={
-                isAdmin && !isProtected ? (
+                canManageAccess && !isProtected ? (
                   <button
                     onClick={() => handleRemove(m.userId)}
                     style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--vkui--color_text_negative)', fontSize: 18, padding: '0 4px' }}
@@ -358,12 +359,12 @@ export function BoardAccessPanel({ id }: Props) {
       </Group>
 
       {/* Invite button */}
-      {isAdmin && (
+      {canManageAccess && (
         <Group header={<Header size="s">Пригласить</Header>}>
           <Div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <CustomSelect
               value={inviteRole}
-              onChange={(e) => setInviteRole(e.target.value)}
+              onChange={(e) => setInviteRole(e.target.value as Extract<BoardRole, 'editor' | 'viewer'>)}
               options={ASSIGNABLE_ROLES}
               style={{ flex: 1 }}
             />

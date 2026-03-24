@@ -105,7 +105,7 @@ export function HomePanel({ id }: Props) {
 
   const openBoard = (boardId: string) => navigator.push(`/board/${boardId}`);
 
-  const myBoards = boards.filter((b) => b.myRole === "admin");
+  const myBoards = boards;
 
   const recentIds = getRecentBoardIds();
   const recentBoards = recentIds

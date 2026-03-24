@@ -20,8 +20,8 @@ async function main() {
       roles: {
         createMany: {
           data: [
-            { userId: FAKE_USER_ID, role: 'admin' },
-            { userId: DEV_USER_ID,  role: 'member' },
+            { userId: FAKE_USER_ID, role: 'owner' },
+            { userId: DEV_USER_ID,  role: 'viewer' },
           ],
         },
       },

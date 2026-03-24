@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
+import type { AuthRequest } from '../../../shared/types/auth';
 
 const router = Router();
 
@@ -19,17 +20,23 @@ router.post('/', (req: Request, res: Response): void => {
   }
 
   const vkSecret = process.env.VK_SECRET;
+  const body = req.body as AuthRequest;
+  const vk_params = body.vk_params;
 
   // Dev mode: no VK signature validation
   if (!vkSecret || process.env.NODE_ENV === 'development') {
-    const { userId, firstName = 'Dev', lastName = 'User' } = req.body as {
-      userId?: number;
-      firstName?: string;
-      lastName?: string;
-    };
+    if (!vk_params) {
+      res.status(400).json({ error: 'vk_params required' });
+      return;
+    }
+
+    const parsed = Object.fromEntries(new URLSearchParams(vk_params));
+    const userId = Number(parsed['vk_user_id']);
+    const firstName = parsed['vk_first_name'] ?? 'Dev';
+    const lastName = parsed['vk_last_name'] ?? 'User';
 
     if (!userId) {
-      res.status(400).json({ error: 'userId required in dev mode' });
+      res.status(400).json({ error: 'vk_user_id required in dev mode' });
       return;
     }
 
@@ -39,7 +46,6 @@ router.post('/', (req: Request, res: Response): void => {
   }
 
   // Production: validate vk_sign
-  const { vk_params } = req.body as { vk_params?: string };
   if (!vk_params) {
     res.status(400).json({ error: 'vk_params required' });
     return;

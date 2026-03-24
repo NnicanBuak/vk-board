@@ -9,8 +9,4 @@ export type BoardRole = SharedBoardRole;
 export type BoardType = SharedBoardType;
 export type BoardVisibility = SharedBoardVisibility;
 
-export type Board = Omit<BoardDto, "myRole"> & {
-  myRole: BoardRole;
-  boardType: BoardType;
-  visibility?: BoardVisibility;
-};
+export type Board = BoardDto;

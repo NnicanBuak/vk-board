@@ -16,9 +16,16 @@ enum CardStatus {
   selected
 }
 
+enum BoardVisibility {
+  public
+  private
+}
+
 enum BoardRoleType {
+  owner
   admin
-  member
+  editor
+  viewer
 }
 
 enum BoardType {
@@ -33,6 +40,7 @@ model Board {
   description String?
   coverImage  String?     @map("cover_image")
   boardType   BoardType   @default(kanban) @map("board_type")
+  visibility  BoardVisibility @default(private)
   chatId      String?     @map("chat_id")
   creatorId   Int         @map("creator_id")
   createdAt   DateTime    @default(now()) @map("created_at")
@@ -132,7 +140,7 @@ model BoardRole {
   id        String        @id @default(uuid())
   boardId   String        @map("board_id")
   userId    Int           @map("user_id")
-  role      BoardRoleType @default(member)
+  role      BoardRoleType @default(viewer)
 
   board     Board         @relation(fields: [boardId], references: [id], onDelete: Cascade)
 
