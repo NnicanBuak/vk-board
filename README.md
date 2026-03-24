@@ -1,4 +1,4 @@
-# Board for Chat — VK Mini App
+# Коллабо — VK Mini App
 
 Многопользовательская платформа досок для чатов ВКонтакте. Поддерживает три режима работы: Kanban с drag-and-drop, Брейншторм с голосованием и Заметки с форматированным текстом.
 
@@ -9,6 +9,23 @@
 - **Rich-text editor:** Tiptap (StarterKit, Image, Link extensions)
 - **Backend:** Node.js, Express, TypeScript, Prisma ORM, PostgreSQL
 - **Авторизация:** JWT, проверка `vk_sign` через HMAC-SHA256
+
+## Типы и контракты
+
+В проекте типы разделены на три слоя:
+
+- `shared/types/*.d.ts` - публичные API-контракты, которые можно безопасно использовать и на фронтенде, и на бэкенде
+- `server/types/entities/*.d.ts` - backend-only entity-типы, близкие к Prisma schema и внутреннему состоянию сервера
+- `src/types/*.d.ts` - UI-расширения поверх shared DTO, удобные для компонентов и панелей
+
+Правило простое:
+
+- если поле должно идти через API - оно живёт в `shared/types`
+- если поле нужно только серверу - оно живёт в `server/types/entities`
+- если поле нужно только UI - оно живёт в `src/types`
+- если файл содержит только типы - он оформляется как `.d.ts`
+
+Для данных, которые хранятся в БД, источник правды остаётся в `server/prisma/schema.prisma`, а backend-entity-типы собираются поверх Prisma schema, чтобы не было рассинхрона.
 
 ## Возможности
 
@@ -348,24 +365,24 @@ npx @vkontakte/vk-tunnel --insecure
 
 ### Бэкенд (`server/.env` / Railway Variables)
 
-| Переменная     | Обязательна | Описание                                                                                                                                                                                                                                       |
-| -------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL` | **да**      | Строка подключения PostgreSQL. Для Neon — pooled-строка с `?sslmode=require`. Локально: `postgresql://boarduser:boardpass@localhost:5432/board_for_chat`.                                                                                      |
-| `JWT_SECRET`   | **да**      | Секрет подписи JWT. Минимум 32 символа. Генерация: `openssl rand -base64 32`. Утечка этого секрета позволяет подделать токены любого пользователя.                                                                                             |
-| `VK_SECRET`    | prod        | Сервисный ключ VK-приложения. Используется для проверки HMAC-SHA256 подписи `vk_sign`. **Если не задан или `NODE_ENV=development`** — сервер работает в dev-режиме: принимает `{ userId, firstName, lastName }` напрямую без проверки подписи. |
-| `FRONTEND_URL` | **да**      | Разрешённый CORS-origin. В production — URL Vercel (`https://your-app.vercel.app`). Можно передать несколько через запятую. В non-production режиме дополнительно разрешается `*.vercel.app`.                                                  |
-| `PORT`         | нет         | Порт HTTP-сервера. По умолчанию `3001`. Railway задаёт автоматически — не переопределять в Variables.                                                                                                                                          |
-| `PUBLIC_UPLOAD_URL` | **да** | Абсолютный URL, по которому frontend сможет скачать загруженный файл. Локально: `http://localhost:3001`. В Railway — `https://<service>.up.railway.app`. Используется в ответе `/api/upload`. |
-| `UPLOAD_DIR`   | нет         | Путь до директории для файлов (можно относительный, по умолчанию `uploads` в каталоге `server/`). Создаётся автоматически. |
-| `UPLOAD_MAX_BYTES` | нет     | Лимит размера файла в байтах. По умолчанию `5242880` (5 МБ). При превышении сервер вернёт 413. |
-| `NODE_ENV`     | нет         | `production` — включает строгую валидацию VK-подписи и отключает автоматическое разрешение `*.vercel.app` в CORS. По умолчанию `development`.                                                                                                  |
+| Переменная          | Обязательна | Описание                                                                                                                                                                                                                                       |
+| ------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`      | **да**      | Строка подключения PostgreSQL. Для Neon — pooled-строка с `?sslmode=require`. Локально: `postgresql://boarduser:boardpass@localhost:5432/board_for_chat`.                                                                                      |
+| `JWT_SECRET`        | **да**      | Секрет подписи JWT. Минимум 32 символа. Генерация: `openssl rand -base64 32`. Утечка этого секрета позволяет подделать токены любого пользователя.                                                                                             |
+| `VK_SECRET`         | prod        | Сервисный ключ VK-приложения. Используется для проверки HMAC-SHA256 подписи `vk_sign`. **Если не задан или `NODE_ENV=development`** — сервер работает в dev-режиме: принимает `{ userId, firstName, lastName }` напрямую без проверки подписи. |
+| `FRONTEND_URL`      | **да**      | Разрешённый CORS-origin. В production — URL Vercel (`https://your-app.vercel.app`). Можно передать несколько через запятую. В non-production режиме дополнительно разрешается `*.vercel.app`.                                                  |
+| `PORT`              | нет         | Порт HTTP-сервера. По умолчанию `3001`. Railway задаёт автоматически — не переопределять в Variables.                                                                                                                                          |
+| `PUBLIC_UPLOAD_URL` | **да**      | Абсолютный URL, по которому frontend сможет скачать загруженный файл. Локально: `http://localhost:3001`. В Railway — `https://<service>.up.railway.app`. Используется в ответе `/api/upload`.                                                  |
+| `UPLOAD_DIR`        | нет         | Путь до директории для файлов (можно относительный, по умолчанию `uploads` в каталоге `server/`). Создаётся автоматически.                                                                                                                     |
+| `UPLOAD_MAX_BYTES`  | нет         | Лимит размера файла в байтах. По умолчанию `5242880` (5 МБ). При превышении сервер вернёт 413.                                                                                                                                                 |
+| `NODE_ENV`          | нет         | `production` — включает строгую валидацию VK-подписи и отключает автоматическое разрешение `*.vercel.app` в CORS. По умолчанию `development`.                                                                                                  |
 
 ### Фронтенд (`.env` / Vercel Environment Variables)
 
-| Переменная       | Обязательна | Описание                                                                                                                    |
-| ---------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Переменная       | Обязательна | Описание                                                                                                                       |
+| ---------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | `VITE_API_URL`   | **да**      | Базовый URL REST API **с префиксом `/api`**. Локально: `http://localhost:3001/api`. На Vercel — `https://api.example.com/api`. |
-| `VITE_VK_APP_ID` | **да**      | Числовой ID VK-приложения. Нужен для инициализации VK Bridge и запросов к VK API (галерея фото, участники чата/сообщества). |
+| `VITE_VK_APP_ID` | **да**      | Числовой ID VK-приложения. Нужен для инициализации VK Bridge и запросов к VK API (галерея фото, участники чата/сообщества).    |
 
 > В dev-режиме (`NODE_ENV=development` / `vite dev`) фронтенд подставляет `userId=1` автоматически и не обращается к VK Bridge. `VITE_VK_APP_ID` в этом случае не используется.
 
@@ -390,10 +407,14 @@ vk-mini-app/
 │   │   └── BoardAccessPanel.tsx  # Управление видимостью и участниками
 │   ├── router/                   # Hash-роутер (vk-mini-apps-router), константы PANELS
 │   ├── store/                    # UserContext — React Context с текущим пользователем
-│   ├── types/                    # TypeScript-интерфейсы (Board, Card, Note, Column, Tag, VKUser)
+│   ├── types/                    # UI-расширения поверх shared DTO (Board, Card, Note, Column, Tag, VKUser)
 │   └── utils/                    # buildShareLink, recentBoards
+├── shared/                       # Общие типы и API-контракты для frontend и backend
+│   └── types/                    # DTO, input-типы и публичные контракты (`.d.ts`)
 ├── server/                       # Бэкенд (Node.js + Express + Prisma)
 │   ├── prisma/                   # schema.prisma, seed.ts
+│   ├── types/
+│   │   └── entities/             # Backend-only entity-типы поверх Prisma schema (`.d.ts`)
 │   └── src/
 │       ├── middleware/            # JWT-мидлвара
 │       └── routes/               # REST API: /auth /boards /cards /columns /likes /tags /notes /upload /images

@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { boardsApi } from '../api/boards';
 import type { Board } from '../types/board';
 import { cacheGet, cacheSet, cacheInvalidate } from '../lib/boardCache';
+import type { BoardCreateInput } from '../../shared/types/board';
 
 const CACHE_KEY = 'boards';
 
@@ -43,7 +44,7 @@ export function useBoards() {
   }, [load]);
 
   const createBoard = useCallback(
-    async (data: { title: string; description?: string; coverImage?: string; boardType?: string }) => {
+    async (data: BoardCreateInput) => {
       const board = await boardsApi.create(data);
       cacheInvalidate(CACHE_KEY);
       setState((s) => ({ ...s, boards: [board, ...s.boards] }));

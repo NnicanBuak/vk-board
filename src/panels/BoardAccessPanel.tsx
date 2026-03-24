@@ -29,6 +29,7 @@ import { boardsApi } from '../api/boards';
 import { useBoardDetail } from '../hooks/useBoardDetail';
 import { useUser } from '../store/userState';
 import type { BoardVisibility } from '../types/board';
+import { resolveVKGroupId } from '../bridge/vkGroupId';
 
 const VK_APP_ID = Number(import.meta.env.VITE_VK_APP_ID ?? 0);
 
@@ -83,15 +84,40 @@ export function BoardAccessPanel({ id }: Props) {
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [inviteRole, setInviteRole] = useState('editor');
   const [inviting, setInviting] = useState(false);
+  const [communityGroupId, setCommunityGroupId] = useState<number | null>(null);
 
   const isAdmin = board?.myRole === 'admin' || board?.myRole === 'owner';
 
   // Board context: chat / community / personal
   const boardContext = board
     ? board.chatId ? 'chat'
-    : board.groupId ? 'community'
+    : communityGroupId ? 'community'
     : 'personal'
     : null;
+
+  useEffect(() => {
+    if (board?.chatId) {
+      setCommunityGroupId(null);
+      return;
+    }
+
+    let cancelled = false;
+    resolveVKGroupId()
+      .then((groupId) => {
+        if (!cancelled) {
+          setCommunityGroupId(groupId);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setCommunityGroupId(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [board?.chatId]);
 
   useEffect(() => {
     if (!boardId) return;
@@ -146,7 +172,7 @@ export function BoardAccessPanel({ id }: Props) {
           lastName: u.last_name,
           photo: u.photo_100 ?? '',
         })));
-      } else if (boardContext === 'community' && board?.groupId) {
+      } else if (boardContext === 'community' && communityGroupId) {
         // Community members — needs groups scope
         const auth = await bridge.send('VKWebAppGetAuthToken', {
           app_id: VK_APP_ID,
@@ -155,7 +181,7 @@ export function BoardAccessPanel({ id }: Props) {
         const res = await bridge.send('VKWebAppCallAPIMethod', {
           method: 'groups.getMembers',
           params: {
-            group_id: board.groupId,
+            group_id: communityGroupId,
             fields: 'photo_100,first_name,last_name',
             count: 100,
             access_token: auth.access_token,

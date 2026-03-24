@@ -1,7 +1,8 @@
 import { Router, Request, Response } from 'express';
 import type { Prisma } from '@prisma/client';
 import prisma from '../db';
-import { requireAuth } from '../middleware/auth';
+import { requireAuth, requireUser } from '../middleware/auth';
+import type { CardWithMetaEntity } from '../../types/entities/card';
 
 const router = Router();
 router.use(requireAuth);
@@ -20,19 +21,22 @@ const cardInclude = {
 
 type CardWithRelations = Prisma.CardGetPayload<{ include: typeof cardInclude }>;
 
-function formatCard(c: CardWithRelations) {
+function formatCard(c: CardWithRelations): CardWithMetaEntity {
+  const { likes, tags, ...rest } = c;
   return {
-    ...c,
-    likeCount: c.likes.length,
-    likedBy: c.likes.map((l) => l.userId),
-    tags: c.tags?.map((ct) => ct.tag) ?? [],
-    likes: undefined,
+    ...rest,
+    likeCount: likes.length,
+    likedBy: likes.map((l) => l.userId),
+    tags: tags?.map((ct) => ct.tag) ?? [],
   };
 }
 
 // GET /api/cards?boardId=&sort=likes|date&columnId=
 router.get('/', async (req: Request, res: Response): Promise<void> => {
-  const userId = req.user!.userId;
+  const user = requireUser(req, res);
+  if (!user) return;
+
+  const userId = user.userId;
   const { boardId, sort, columnId } = req.query as {
     boardId?: string;
     sort?: string;
@@ -64,7 +68,10 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
 
 // POST /api/cards
 router.post('/', async (req: Request, res: Response): Promise<void> => {
-  const userId = req.user!.userId;
+  const user = requireUser(req, res);
+  if (!user) return;
+
+  const userId = user.userId;
   const { boardId, columnId, title, description, url, imageUrl } = req.body as {
     boardId?: string;
     columnId?: string;
@@ -106,7 +113,10 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
 
 // PATCH /api/cards/:id
 router.patch('/:id', async (req: Request, res: Response): Promise<void> => {
-  const userId = req.user!.userId;
+  const user = requireUser(req, res);
+  if (!user) return;
+
+  const userId = user.userId;
   const { id } = req.params as { id: string };
   const { title, description, url, imageUrl, status, columnId, order } = req.body as {
     title?: string;
@@ -150,7 +160,10 @@ router.patch('/:id', async (req: Request, res: Response): Promise<void> => {
 
 // DELETE /api/cards/:id
 router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
-  const userId = req.user!.userId;
+  const user = requireUser(req, res);
+  if (!user) return;
+
+  const userId = user.userId;
   const { id } = req.params as { id: string };
 
   const card = await prisma.card.findUnique({ where: { id } });

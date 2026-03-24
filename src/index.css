@@ -1,3 +1,5 @@
+@import url("https://fonts.googleapis.com/css2?family=Poiret+One&display=swap");
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -1483,12 +1485,13 @@ body {
 }
 
 .hero__title {
-  font-size: 42px;
+  font-family: "Poiret One", sans-serif;
+  font-size: 64px;
   font-weight: 800;
   color: #ffffff;
   letter-spacing: -0.5px;
   line-height: 1.15;
-  margin: 0;
+  margin-bottom: 1em;
 }
 
 .hero__subtitle {

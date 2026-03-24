@@ -1,16 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
-import { presenceApi, type PresenceUser } from '../api/presence';
+import {
+  presenceApi,
+  type PresenceUser,
+  type PresenceUserSelf,
+} from '../api/presence';
 
 const HEARTBEAT_MS = 30_000; // send heartbeat every 30 s
 const POLL_MS = 15_000;      // refresh viewer list every 15 s
 
-interface SelfInfo {
-  firstName: string;
-  lastName: string;
-  photo100: string;
-}
-
-export function usePresence(boardId: string, self: SelfInfo | null) {
+export function usePresence(boardId: string, self: PresenceUserSelf | null) {
   const [viewers, setViewers] = useState<PresenceUser[]>([]);
   const selfRef = useRef(self);
 

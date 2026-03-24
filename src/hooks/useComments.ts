@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { commentsApi } from '../api/comments';
 import type { Comment } from '../types/card';
+import type { CommentCreateInput } from '../../shared/types/comment';
 
 export function useComments(cardId: string | null) {
   const [comments, setComments] = useState<Comment[]>([]);
@@ -25,7 +26,7 @@ export function useComments(cardId: string | null) {
 
   const addComment = useCallback(async (text: string) => {
     if (!cardId) return;
-    const comment = await commentsApi.create({ cardId, text });
+    const comment = await commentsApi.create({ cardId, text } satisfies CommentCreateInput);
     setComments((prev) => [...prev, comment]);
     return comment;
   }, [cardId]);

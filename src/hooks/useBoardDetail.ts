@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { boardsApi } from '../api/boards';
 import type { Board } from '../types/board';
 import { cacheGet, cacheSet } from '../lib/boardCache';
+import type { BoardUpdateInput } from '../../shared/types/board';
 
 export function useBoardDetail(boardId: string) {
   const cacheKey = `board:${boardId}`;
@@ -50,7 +51,7 @@ export function useBoardDetail(boardId: string) {
     }
   }, [board, boardId, cacheKey]);
 
-  const updateBoard = useCallback(async (data: { title?: string; description?: string; coverImage?: string; boardType?: string; visibility?: string; groupId?: string | null }) => {
+  const updateBoard = useCallback(async (data: BoardUpdateInput) => {
     if (!board) return;
     const prev = board;
     setBoard({ ...board, ...data } as Board);

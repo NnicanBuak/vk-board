@@ -1,13 +1,16 @@
 import { Router, Request, Response } from 'express';
 import prisma from '../db';
-import { requireAuth } from '../middleware/auth';
+import { requireAuth, requireUser } from '../middleware/auth';
 
 const router = Router();
 router.use(requireAuth);
 
 // POST /api/likes — add like
 router.post('/', async (req: Request, res: Response): Promise<void> => {
-  const userId = req.user!.userId;
+  const user = requireUser(req, res);
+  if (!user) return;
+
+  const userId = user.userId;
   const { cardId } = req.body as { cardId?: string };
 
   if (!cardId) {
@@ -35,7 +38,10 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
 
 // DELETE /api/likes — remove like
 router.delete('/', async (req: Request, res: Response): Promise<void> => {
-  const userId = req.user!.userId;
+  const user = requireUser(req, res);
+  if (!user) return;
+
+  const userId = user.userId;
   const { cardId } = req.body as { cardId?: string };
 
   if (!cardId) {

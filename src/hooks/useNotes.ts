@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { notesApi } from '../api/notes';
 import type { Note } from '../types/note';
+import type { NoteCreateInput, NoteUpdateInput } from '../../shared/types/note';
 
 export function useNotes(boardId: string) {
   const [notes, setNotes] = useState<Note[]>([]);
@@ -23,13 +24,13 @@ export function useNotes(boardId: string) {
 
   useEffect(() => { load(); }, [load]);
 
-  const addNote = useCallback(async (data: { title: string; parentId?: string }) => {
+  const addNote = useCallback(async (data: Omit<NoteCreateInput, 'content'>) => {
     const note = await notesApi.create(boardId, { ...data, content: '' });
     setNotes((prev) => [...prev, note]);
     return note;
   }, [boardId]);
 
-  const updateNote = useCallback(async (noteId: string, data: { title?: string; content?: string }) => {
+  const updateNote = useCallback(async (noteId: string, data: Pick<NoteUpdateInput, 'title' | 'content'>) => {
     const updated = await notesApi.update(noteId, data);
     setNotes((prev) => prev.map((n) => n.id === noteId ? updated : n));
     return updated;

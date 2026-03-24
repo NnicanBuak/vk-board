@@ -1,12 +1,12 @@
 import { api } from './client';
-import type { Comment } from '../types/card';
+import type { CommentCreateInput, CommentDto } from '../../shared/types/comment';
 
 export const commentsApi = {
   list: (cardId: string) =>
-    api.get<Comment[]>(`/comments?cardId=${cardId}`),
+    api.get<CommentDto[]>(`/comments?cardId=${cardId}`),
 
-  create: (data: { cardId: string; text: string }) =>
-    api.post<Comment>('/comments', data),
+  create: (data: CommentCreateInput) =>
+    api.post<CommentDto>('/comments', data),
 
   delete: (id: string) =>
     api.delete<void>(`/comments/${id}`),

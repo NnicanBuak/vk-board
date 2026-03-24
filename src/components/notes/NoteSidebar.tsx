@@ -13,7 +13,12 @@ function buildTree(notes: Note[]): NoteTreeItem[] {
   const roots: NoteTreeItem[] = [];
   byId.forEach((node) => {
     if (node.parentId && byId.has(node.parentId)) {
-      byId.get(node.parentId)!.children.push(node);
+      const parent = byId.get(node.parentId);
+      if (parent) {
+        parent.children.push(node);
+      } else {
+        roots.push(node);
+      }
     } else {
       roots.push(node);
     }

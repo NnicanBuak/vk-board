@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import prisma from '../db';
-import { requireAuth } from '../middleware/auth';
+import { requireAuth, requireUser } from '../middleware/auth';
+import type { ColumnEntity } from '../../types/entities/column';
 
 const router = Router();
 router.use(requireAuth);
@@ -14,7 +15,10 @@ async function getRole(boardId: string, userId: number) {
 
 // GET /api/columns?boardId=
 router.get('/', async (req: Request, res: Response): Promise<void> => {
-  const userId = req.user!.userId;
+  const user = requireUser(req, res);
+  if (!user) return;
+
+  const userId = user.userId;
   const { boardId } = req.query as { boardId?: string };
 
   if (!boardId) { res.status(400).json({ error: 'boardId is required' }); return; }
@@ -22,7 +26,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
   const role = await getRole(boardId, userId);
   if (!role) { res.status(403).json({ error: 'Access denied' }); return; }
 
-  const columns = await prisma.column.findMany({
+  const columns: ColumnEntity[] = await prisma.column.findMany({
     where: { boardId },
     orderBy: { order: 'asc' },
   });
@@ -32,7 +36,10 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
 
 // POST /api/columns — admin only
 router.post('/', async (req: Request, res: Response): Promise<void> => {
-  const userId = req.user!.userId;
+  const user = requireUser(req, res);
+  if (!user) return;
+
+  const userId = user.userId;
   const { boardId, title } = req.body as { boardId?: string; title?: string };
 
   if (!boardId || !title?.trim()) {
@@ -48,7 +55,7 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
     orderBy: { order: 'desc' },
   });
 
-  const column = await prisma.column.create({
+  const column: ColumnEntity = await prisma.column.create({
     data: { boardId, title: title.trim(), order: (last?.order ?? -1) + 1 },
   });
 
@@ -57,7 +64,10 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
 
 // PATCH /api/columns/:id — rename or reorder (admin only)
 router.patch('/:id', async (req: Request, res: Response): Promise<void> => {
-  const userId = req.user!.userId;
+  const user = requireUser(req, res);
+  if (!user) return;
+
+  const userId = user.userId;
   const { id } = req.params as { id: string };
   const { title, order } = req.body as { title?: string; order?: number };
 
@@ -67,7 +77,7 @@ router.patch('/:id', async (req: Request, res: Response): Promise<void> => {
   const role = await getRole(column.boardId, userId);
   if (role !== 'admin') { res.status(403).json({ error: 'Admin only' }); return; }
 
-  const updated = await prisma.column.update({
+  const updated: ColumnEntity = await prisma.column.update({
     where: { id },
     data: {
       ...(title !== undefined && { title: title.trim() }),
@@ -80,7 +90,10 @@ router.patch('/:id', async (req: Request, res: Response): Promise<void> => {
 
 // DELETE /api/columns/:id — admin only, cards move to null column
 router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
-  const userId = req.user!.userId;
+  const user = requireUser(req, res);
+  if (!user) return;
+
+  const userId = user.userId;
   const { id } = req.params as { id: string };
 
   const column = await prisma.column.findUnique({ where: { id } });

@@ -2,14 +2,18 @@ import { useState, useCallback, useEffect } from 'react';
 import { cardsApi, type SortMode } from '../api/cards';
 import { likesApi } from '../api/likes';
 import type { Card } from '../types/card';
+import type { CardCreateInput, CardDto } from '../../shared/types/card';
 
 /** Ensures fields added in later migrations always have safe defaults. */
-function normalizeCard(raw: Card): Card {
+type CardResponse = CardDto & Partial<Pick<Card, 'assignees' | 'dueDate'>>;
+
+function normalizeCard(raw: CardResponse): Card {
   return {
     ...raw,
     assignees: raw.assignees ?? [],
     likedBy:   raw.likedBy   ?? [],
     tags:      raw.tags      ?? [],
+    dueDate: raw.dueDate ?? null,
   };
 }
 
@@ -39,7 +43,7 @@ export function useCards(boardId: string, sort: SortMode) {
   }, [load]);
 
   const addCard = useCallback(
-    async (data: { title: string; description?: string; url?: string; columnId?: string | null }) => {
+    async (data: Omit<CardCreateInput, 'boardId'>) => {
       const card = normalizeCard(await cardsApi.create({ boardId, ...data }));
       setState((s) => ({ ...s, cards: [...s.cards, card] }));
       return card;

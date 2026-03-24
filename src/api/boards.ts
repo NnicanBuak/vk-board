@@ -1,26 +1,31 @@
 import { api } from './client';
-import type { Board } from '../types/board';
+import type {
+  BoardCreateInput,
+  BoardDto,
+  BoardMemberDto,
+  BoardUpdateInput,
+} from '../../shared/types/board';
 
 export const boardsApi = {
-  list: () => api.get<Board[]>('/boards'),
+  list: () => api.get<BoardDto[]>('/boards'),
 
-  get: (id: string) => api.get<Board>(`/boards/${id}`),
+  get: (id: string) => api.get<BoardDto>(`/boards/${id}`),
 
-  create: (data: { title: string; description?: string; chatId?: string; coverImage?: string; boardType?: string }) =>
-    api.post<Board>('/boards', data),
+  create: (data: BoardCreateInput) =>
+    api.post<BoardDto>('/boards', data),
 
-  update: (id: string, data: { title?: string; description?: string; coverImage?: string; boardType?: string; visibility?: string; groupId?: string | null }) =>
-    api.patch<Board>(`/boards/${id}`, data),
+  update: (id: string, data: BoardUpdateInput) =>
+    api.patch<BoardDto>(`/boards/${id}`, data),
 
   delete: (id: string) => api.delete<void>(`/boards/${id}`),
 
-  members: (id: string) => api.get<{ userId: number; role: string }[]>(`/boards/${id}/members`),
+  members: (id: string) => api.get<BoardMemberDto[]>(`/boards/${id}/members`),
 
   addMember: (id: string, userId: number, role: string) =>
-    api.post<{ userId: number; role: string }>(`/boards/${id}/members`, { userId, role }),
+    api.post<BoardMemberDto>(`/boards/${id}/members`, { userId, role }),
 
   updateMember: (id: string, userId: number, role: string) =>
-    api.patch<{ userId: number; role: string }>(`/boards/${id}/members/${userId}`, { role }),
+    api.patch<BoardMemberDto>(`/boards/${id}/members/${userId}`, { role }),
 
   removeMember: (id: string, userId: number) =>
     api.delete<void>(`/boards/${id}/members/${userId}`),

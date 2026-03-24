@@ -35,3 +35,21 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
     res.status(401).json({ error: 'Invalid token' });
   }
 }
+
+export function requireUser(req: Request, res: Response): AuthPayload | null {
+  const user = req.user;
+  if (!user) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return null;
+  }
+
+  return user;
+}
+
+export function getAuthenticatedUser(req: Request): AuthPayload {
+  if (!req.user) {
+    throw new Error('Authenticated user is missing from request context');
+  }
+
+  return req.user;
+}

@@ -1,0 +1,11 @@
+**
+!package.json
+!package-lock.json
+!src/
+!src/**
+!prisma/
+!prisma/**
+!entrypoint.sh
+!entrypoint.prod.sh
+!tsconfig.json
+!prisma.config.ts

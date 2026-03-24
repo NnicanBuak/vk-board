@@ -1,35 +1,20 @@
 import { api } from './client';
-import type { Card, CardStatus } from '../types/card';
+import type {
+  CardCreateInput,
+  CardDto,
+  CardSortMode,
+  CardUpdateInput,
+} from '../../shared/types/card';
 
-export type SortMode = 'likes' | 'date';
+export type SortMode = CardSortMode;
 
 export const cardsApi = {
   list: (boardId: string, sort: SortMode = 'date') =>
-    api.get<Card[]>(`/cards?boardId=${boardId}&sort=${sort}`),
+    api.get<CardDto[]>(`/cards?boardId=${boardId}&sort=${sort}`),
 
-  create: (data: {
-    boardId: string;
-    columnId?: string | null;
-    title: string;
-    description?: string;
-    url?: string;
-    imageUrl?: string;
-  }) => api.post<Card>('/cards', data),
+  create: (data: CardCreateInput) => api.post<CardDto>('/cards', data),
 
-  update: (
-    id: string,
-    data: {
-      title?: string;
-      description?: string;
-      url?: string;
-      imageUrl?: string;
-      status?: CardStatus;
-      columnId?: string | null;
-      order?: number;
-      assignees?: number[];
-      dueDate?: string | null;
-    },
-  ) => api.patch<Card>(`/cards/${id}`, data),
+  update: (id: string, data: CardUpdateInput) => api.patch<CardDto>(`/cards/${id}`, data),
 
   delete: (id: string) => api.delete<void>(`/cards/${id}`),
 };
