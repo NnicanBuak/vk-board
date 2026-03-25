@@ -1,23 +1,23 @@
-import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
-import { VitePWA } from 'vite-plugin-pwa';
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+import { VitePWA } from "vite-plugin-pwa";
 
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      registerType: "autoUpdate",
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
         cleanupOutdatedCaches: true,
       },
       manifest: {
-        name: 'Board for Chat',
-        short_name: 'Board',
-        theme_color: '#ffffff',
-        background_color: '#ffffff',
-        display: 'standalone',
+        name: "Collabo - Board",
+        short_name: "Collabo",
+        theme_color: "#ffffff",
+        background_color: "#ffffff",
+        display: "standalone",
         icons: [],
       },
     }),
@@ -32,8 +32,8 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          vkui: ['@vkontakte/vkui'],
-          icons: ['@vkontakte/icons'],
+          vkui: ["@vkontakte/vkui"],
+          icons: ["@vkontakte/icons"],
         },
       },
     },
