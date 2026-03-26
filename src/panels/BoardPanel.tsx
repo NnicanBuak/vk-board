@@ -637,7 +637,8 @@ export function BoardPanel({ id }: Props) {
         {error ? (
           <ErrorPlaceholder message={error} onRetry={() => { refreshBoard(); refreshCards(); }} />
         ) : (
-          <div className="page-inner">
+          <div className="board-panel__body">
+            <div className="page-inner">
             {/* Board title + description */}
             <div className="board-page-title-row">
               <h2 className="board-page-title">{board?.title ?? ''}</h2>
@@ -700,6 +701,7 @@ export function BoardPanel({ id }: Props) {
                 onSnackbar={setSnackbar}
               />
             )}
+            </div>
           </div>
         )}
       </PullToRefresh>

@@ -91,90 +91,166 @@ body {
   );
 }
 
-/* ── Hero mesh-orb gradient ── */
+/* ── Hero PS3-inspired wave backdrop ── */
 .hero-bg {
   position: relative;
   overflow: hidden;
-  background: #6b57af57;
+  isolation: isolate;
+  background:
+    radial-gradient(
+      circle at 18% 22%,
+      rgba(126, 221, 255, 0.2),
+      transparent 24%
+    ),
+    radial-gradient(
+      circle at 82% 16%,
+      rgba(171, 130, 255, 0.18),
+      transparent 22%
+    ),
+    linear-gradient(135deg, #031027 0%, #0a1d47 32%, #0f3675 58%, #061227 100%);
+}
+
+.hero-bg::before {
+  content: "";
+  position: absolute;
+  inset: -28% -10% -8%;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      circle at 50% 62%,
+      rgba(255, 255, 255, 0.12),
+      transparent 26%
+    ),
+    radial-gradient(
+      circle at 48% 50%,
+      rgba(88, 182, 255, 0.18),
+      transparent 40%
+    );
+  filter: blur(56px);
+  opacity: 0.95;
 }
 
 .hero-orb {
   position: absolute;
-  border-radius: 50%;
+  left: -22%;
+  width: 144%;
+  height: clamp(72px, 10vw, 132px);
   pointer-events: none;
-  filter: blur(72px);
-  opacity: 0.75;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  border-left-color: transparent;
+  border-right-color: transparent;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.04) 18%,
+    rgba(255, 255, 255, 0.18) 36%,
+    rgba(126, 221, 255, 0.5) 50%,
+    rgba(255, 255, 255, 0.16) 68%,
+    rgba(255, 255, 255, 0.04) 84%,
+    transparent 100%
+  );
+  box-shadow:
+    0 0 28px rgba(111, 199, 255, 0.22),
+    inset 0 0 24px rgba(255, 255, 255, 0.08);
+  filter: blur(0.6px);
+  opacity: 0.86;
+  mix-blend-mode: screen;
+  transform-origin: center;
+}
+
+.hero-orb::before {
+  content: "";
+  position: absolute;
+  inset: 16% 6%;
+  border-radius: inherit;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-left-color: transparent;
+  border-right-color: transparent;
+  opacity: 0.72;
 }
 
 .hero-orb--1 {
-  width: 70%;
-  aspect-ratio: 1;
-  top: -20%;
-  left: -15%;
-  background: radial-gradient(circle, #7c4dff 0%, transparent 70%);
-  animation: orbFloat1 11s ease-in-out infinite alternate;
+  top: 11%;
+  transform: rotate(-8deg) scaleX(1.08);
+  animation: heroWave1 18s ease-in-out infinite;
 }
 
 .hero-orb--2 {
-  width: 60%;
-  aspect-ratio: 1;
-  top: 10%;
-  right: -20%;
-  background: radial-gradient(circle, #2979ff 0%, transparent 70%);
-  animation: orbFloat2 14s ease-in-out infinite alternate;
+  top: 28%;
+  left: -18%;
+  width: 138%;
+  height: clamp(66px, 9vw, 116px);
+  transform: rotate(-4deg);
+  opacity: 0.78;
+  animation: heroWave2 20s ease-in-out infinite;
 }
 
 .hero-orb--3 {
-  width: 55%;
-  aspect-ratio: 1;
-  bottom: -15%;
-  left: 25%;
-  background: radial-gradient(circle, #00bfa5 0%, transparent 70%);
-  animation: orbFloat3 9s ease-in-out infinite alternate;
+  top: 50%;
+  left: -16%;
+  width: 150%;
+  height: clamp(84px, 11vw, 142px);
+  transform: rotate(3deg);
+  opacity: 0.72;
+  animation: heroWave3 24s ease-in-out infinite;
 }
 
 .hero-orb--4 {
-  width: 40%;
-  aspect-ratio: 1;
-  top: 30%;
-  left: 20%;
-  background: radial-gradient(circle, #e040fb 0%, transparent 70%);
-  animation: orbFloat4 16s ease-in-out infinite alternate;
+  top: 69%;
+  left: -24%;
+  width: 146%;
+  height: clamp(94px, 12vw, 154px);
+  transform: rotate(8deg);
+  opacity: 0.64;
+  animation: heroWave4 22s ease-in-out infinite;
 }
 
-@keyframes orbFloat1 {
+@keyframes heroWave1 {
   0% {
-    transform: translate(0, 0) scale(1);
+    transform: translate3d(-2%, 0, 0) rotate(-8deg) scaleX(1.08);
+  }
+  50% {
+    transform: translate3d(2%, -4%, 0) rotate(-5deg) scaleX(1.12);
   }
   100% {
-    transform: translate(18%, 28%) scale(1.25);
-  }
-}
-
-@keyframes orbFloat2 {
-  0% {
-    transform: translate(0, 0) scale(1.1);
-  }
-  100% {
-    transform: translate(-22%, 18%) scale(0.85);
+    transform: translate3d(-1%, 2%, 0) rotate(-9deg) scaleX(1.06);
   }
 }
 
-@keyframes orbFloat3 {
+@keyframes heroWave2 {
   0% {
-    transform: translate(0, 0) scale(0.9);
+    transform: translate3d(0, 0, 0) rotate(-4deg) scaleX(1);
+  }
+  50% {
+    transform: translate3d(3%, 5%, 0) rotate(-1deg) scaleX(1.04);
   }
   100% {
-    transform: translate(-18%, -28%) scale(1.2);
+    transform: translate3d(-2%, -3%, 0) rotate(-5deg) scaleX(0.98);
   }
 }
 
-@keyframes orbFloat4 {
+@keyframes heroWave3 {
   0% {
-    transform: translate(0, 0) scale(1);
+    transform: translate3d(-1%, 0, 0) rotate(3deg) scaleX(1);
+  }
+  50% {
+    transform: translate3d(2%, -4%, 0) rotate(6deg) scaleX(1.03);
   }
   100% {
-    transform: translate(24%, -20%) scale(0.8);
+    transform: translate3d(-3%, 3%, 0) rotate(2deg) scaleX(1.01);
+  }
+}
+
+@keyframes heroWave4 {
+  0% {
+    transform: translate3d(1%, 0, 0) rotate(8deg) scaleX(1);
+  }
+  50% {
+    transform: translate3d(-2%, -3%, 0) rotate(10deg) scaleX(1.05);
+  }
+  100% {
+    transform: translate3d(2%, 2%, 0) rotate(7deg) scaleX(0.98);
   }
 }
 
@@ -184,6 +260,19 @@ body {
   max-width: 900px;
   margin-left: auto;
   margin-right: auto;
+}
+
+.board-panel__body {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: calc(100dvh - var(--vkui_internal--panel_header_height, 56px));
+}
+
+.board-panel__body .page-inner {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
 }
 
 /* ── Board card grid (Pinterest masonry via CSS columns) ── */
@@ -362,7 +451,10 @@ body {
   gap: 12px;
   padding: 12px 16px 16px;
   overflow-x: auto;
+  overflow-y: auto;
   align-items: flex-start;
+  flex: 1 1 auto;
+  min-height: 0;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
 }
@@ -1468,41 +1560,42 @@ body {
 
 /* ── HomePanel: hero content layout ── */
 .hero-bg {
-  height: calc(50vh + env(safe-area-inset-top));
-  padding-top: env(safe-area-inset-top);
+  height: calc(30vh + env(safe-area-inset-top));
 }
 
 .hero-bg__content {
   position: relative;
-  z-index: 1;
   height: 100%;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  justify-content: flex-end;
-  padding: 48px 24px 36px;
+  justify-content: space-between;
   gap: 12px;
 }
 
 .hero__title {
-  display: block;
+  mix-blend-mode: screen;
   width: 100%;
+  background: rgba(255, 255, 255, 0.2);
+  position: relative;
   font-family: "Poiret One", sans-serif;
-  font-size: 64px;
-  font-weight: 800;
-  color: transparent;
-  -webkit-text-fill-color: transparent;
-  letter-spacing: -0.5px;
-  line-height: 1.15;
-  text-align: center;
-  margin-bottom: 1em;
+  font-size: 48px;
+  font-weight: 700;
+  color: #000;
+  letter-spacing: -0.02em;
+  margin: 0;
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: start;
 }
 
 .hero__subtitle {
   font-size: 20px;
-  color: rgba(255, 255, 255, 0.88);
+  color: rgba(255, 255, 255, 0.72);
   line-height: 1.5;
   max-width: 280px;
+  padding: 1rem 2rem;
   margin: 0;
 }
 

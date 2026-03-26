@@ -201,7 +201,8 @@ export function HomePanel({ id }: Props) {
           <div className="hero-orb hero-orb--4" />
 
           <div className="page-inner hero-bg__content">
-            <h1 className="hero__title">Коллабо</h1>
+            <div className="hero__title">Коллабо
+            </div>
             <p className="hero__subtitle">
               Коллаборируйтесь с <br />
               <Icon20UsersOutline
