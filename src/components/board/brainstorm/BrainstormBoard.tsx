@@ -1,16 +1,18 @@
 import { useState, useEffect, useMemo } from 'react';
 import {
   ModalRoot,
-  ModalPage,
-  ModalPageContent,
-  ModalPageHeader,
   Button,
 } from '@vkontakte/vkui';
 import { Icon16Like, Icon16LikeOutline } from '@vkontakte/icons';
-import { CardForm } from '../card/CardForm';
-import type { Card } from '../../types/card';
+import { CreateCardModal } from '../../modals/CreateCardModal';
+import type { Card } from '../../../types/card';
 
-const MODAL_CARD = 'bs_card_form';
+const BRAINSTORM_MODAL_IDS = {
+  createCard: 'bs_card_form',
+} as const;
+
+type BrainstormModalId =
+  (typeof BRAINSTORM_MODAL_IDS)[keyof typeof BRAINSTORM_MODAL_IDS];
 
 interface IdeaCardProps {
   card: Card;
@@ -96,11 +98,12 @@ export function BrainstormBoard({
   sortMode,
   sortDirection,
 }: BrainstormBoardProps) {
-  const [activeModal, setActiveModal] = useState<string | null>(null);
+  const [activeModal, setActiveModal] = useState<BrainstormModalId | null>(null);
+  const closeModal = () => setActiveModal(null);
 
   useEffect(() => {
     if (!canEdit || !registerFabAction) return undefined;
-    registerFabAction(() => setActiveModal(MODAL_CARD));
+    registerFabAction(() => setActiveModal(BRAINSTORM_MODAL_IDS.createCard));
     return () => registerFabAction(null);
   }, [canEdit, registerFabAction]);
 
@@ -114,13 +117,12 @@ export function BrainstormBoard({
     });
   }, [cards, sortMode, sortDirection]);
 
-  const handleCardSave = async (data: { title: string; description?: string; url?: string }) => {
-    try {
-      await addCard({ ...data, columnId: null });
-      setActiveModal(null);
-    } catch (e) {
-      onSnackbar((e as Error).message);
-    }
+  const handleCardSave = async (data: {
+    title: string;
+    description?: string;
+    url?: string;
+  }) => {
+    await addCard({ ...data, columnId: null });
   };
 
   return (
@@ -130,7 +132,9 @@ export function BrainstormBoard({
           <div className="brainstorm__empty">
             <p>Пока нет идей</p>
             {canEdit && (
-              <Button onClick={() => setActiveModal(MODAL_CARD)}>
+              <Button
+                onClick={() => setActiveModal(BRAINSTORM_MODAL_IDS.createCard)}
+              >
                 Добавить первую идею
               </Button>
             )}
@@ -153,20 +157,15 @@ export function BrainstormBoard({
       </div>
 
 
-      <ModalRoot activeModal={activeModal} onClose={() => setActiveModal(null)}>
-        <ModalPage
-          id={MODAL_CARD}
-          dynamicContentHeight
-          hideCloseButton
-          header={<ModalPageHeader>Новая идея</ModalPageHeader>}
-        >
-          <ModalPageContent>
-            <CardForm
-              onSave={handleCardSave}
-              onCancel={() => setActiveModal(null)}
-            />
-          </ModalPageContent>
-        </ModalPage>
+      <ModalRoot activeModal={activeModal} onClose={closeModal}>
+        <CreateCardModal
+          id={BRAINSTORM_MODAL_IDS.createCard}
+          open={activeModal === BRAINSTORM_MODAL_IDS.createCard}
+          title="Новая идея"
+          onClose={closeModal}
+          onSave={handleCardSave}
+          onError={onSnackbar}
+        />
       </ModalRoot>
     </>
   );

@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { Spinner } from '@vkontakte/vkui';
 import { Icon16MenuOutline } from '@vkontakte/icons';
-import { ErrorPlaceholder } from '../common/ErrorPlaceholder';
-import { useNotes } from '../../hooks/useNotes';
+import { ErrorPlaceholder } from '../../common/ErrorPlaceholder';
+import { useNotes } from '../../../hooks/useNotes';
 import { NoteSidebar } from './NoteSidebar';
 import { NoteEditor } from './NoteEditor';
-import type { Note } from '../../types/note';
+import type { Note } from '../../../types/note';
 
 interface NotesBoardProps {
   boardId: string;

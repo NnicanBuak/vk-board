@@ -4,7 +4,6 @@ import {
   PanelHeader,
   PanelHeaderBack,
   PanelHeaderButton,
-  PanelHeaderClose,
   Spinner,
   PullToRefresh,
   Snackbar,
@@ -12,46 +11,36 @@ import {
   ActionSheet,
   ActionSheetItem,
   ModalRoot,
-  ModalPage,
-  ModalPageContent,
-  ModalPageHeader,
-  FormItem,
-  Input,
-  Textarea,
-  Button,
   Alert,
-  List,
-  CellButton,
 } from '@vkontakte/vkui';
 import {
   Icon24LinkedOutline,
   Icon28MoreHorizontal,
   Icon16SortArrowUp,
   Icon16SortArrowDown,
-  Icon16Like,
-  Icon16ClockOutline,
-  Icon16Done,
 } from '@vkontakte/icons';
 import { useRouteNavigator, useParams, useActiveVkuiLocation } from '@vkontakte/vk-mini-apps-router';
 import { useFab } from '../store/fabState';
 import { isDraggingRef } from '../store/dragRef';
 import { PANELS } from '../router/routes';
-import bridge from '@vkontakte/vk-bridge';
 
 import { useBoardDetail } from '../hooks/useBoardDetail';
 import { useCards } from '../hooks/useCards';
 import { useColumns } from '../hooks/useColumns';
 import { useUser } from '../store/userState';
 import { ErrorPlaceholder } from '../components/common/ErrorPlaceholder';
-import { KanbanBoard } from '../components/board/KanbanBoard';
-import { BrainstormBoard } from '../components/board/BrainstormBoard';
-import { NotesBoard } from '../components/notes/NotesBoard';
-import { CardDetailModal } from '../components/board/CardDetailModal';
+import { BrainstormBoard } from '../components/board/brainstorm/BrainstormBoard';
+import { KanbanBoard } from '../components/board/kanban/KanbanBoard';
+import { NotesBoard } from '../components/board/notes/NotesBoard';
+import { BoardCoverModal } from '../components/modals/BoardCoverModal';
+import { BoardDescriptionModal } from '../components/modals/BoardDescriptionModal';
+import { BoardRenameModal } from '../components/modals/BoardRenameModal';
+import { BrainstormSortModal } from '../components/modals/BrainstormSortModal';
+import { CardDetailModal } from '../components/modals/CardDetailModal';
 import { buildShareLink } from '../utils/buildShareLink';
 import { trackBoardVisit } from '../utils/recentBoards';
 import { tagsApi } from '../api/tags';
 import { boardsApi } from '../api/boards';
-import { uploadImage } from '../api/uploads';
 import { usePresence } from '../hooks/usePresence';
 import type { Card, Tag } from '../types/card';
 import { BOARD_TYPE_LABELS, BOARD_TYPE_THEMES } from '../constants/boardTypes';
@@ -60,12 +49,14 @@ import type { BoardMemberDto } from '../../shared/types/board';
 const AVATAR_COLORS = ['#e53935', '#8e24aa', '#1e88e5', '#00897b', '#f4511e', '#33b679', '#fb8c00', '#6d4c41'];
 function memberColor(userId: number) { return AVATAR_COLORS[userId % AVATAR_COLORS.length]; }
 
-const MODAL_RENAME = 'board_rename';
-const MODAL_DESC = 'board_desc';
-const MODAL_COVER = 'board_cover';
-const MODAL_SORT = 'brainstorm_sort';
+const BOARD_MODAL_IDS = {
+  rename: 'board_rename',
+  description: 'board_desc',
+  cover: 'board_cover',
+  sort: 'brainstorm_sort',
+} as const;
 
-const VK_APP_ID = Number(import.meta.env.VITE_VK_APP_ID ?? 0);
+type BoardModalId = (typeof BOARD_MODAL_IDS)[keyof typeof BOARD_MODAL_IDS];
 
 interface Props { id: string }
 
@@ -84,7 +75,7 @@ export function BoardPanel({ id }: Props) {
   const { user } = useUser();
   const userId = user?.userId ?? 0;
 
-  const [activeModal, setActiveModal] = useState<string | null>(null);
+  const [activeModal, setActiveModal] = useState<BoardModalId | null>(null);
   const [actionsSheetOpen, setActionsSheetOpen] = useState(false);
   const fabActionRef = useRef<(() => void) | null>(null);
   const [selectedCard, setSelectedCard] = useState<Card | null>(null);
@@ -100,23 +91,12 @@ export function BoardPanel({ id }: Props) {
     callback();
   };
 
-  // Mini-modal state
-  const [editTitle, setEditTitle] = useState('');
-  const [editDesc, setEditDesc] = useState('');
-  const [coverPreview, setCoverPreview] = useState('');
-  const [coverUrl, setCoverUrl] = useState('');
-  const [uploadingCover, setUploadingCover] = useState(false);
-  const [saving, setSaving] = useState(false);
-
   const [showDeleteAlert, setShowDeleteAlert] = useState(false);
   const [boardTags, setBoardTags] = useState<Tag[]>([]);
   const [boardMembers, setBoardMembers] = useState<BoardMemberDto[]>([]);
   const [viewersOpen, setViewersOpen] = useState(false);
   const viewersBtnRef = useRef<HTMLDivElement>(null);
   const actionsSheetToggleRef = useRef<HTMLButtonElement | null>(null);
-  const coverFileRef = useRef<HTMLInputElement>(null);
-  const renameInputRef = useRef<HTMLInputElement | null>(null);
-  const descTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const { board, loading: boardLoading, error: boardError, refresh: refreshBoard, updateBoard } = useBoardDetail(boardId);
   const { cards, loading: cardsLoading, error: cardsError, refresh: refreshCards, addCard, updateCard, removeCard, toggleLike } = useCards(boardId, 'date');
@@ -161,22 +141,6 @@ export function BoardPanel({ id }: Props) {
     if (updated) setSelectedCard(updated);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cards]);
-
-  useEffect(() => {
-    if (activeModal !== MODAL_RENAME) return;
-    const frame = requestAnimationFrame(() => {
-      renameInputRef.current?.focus({ preventScroll: true });
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [activeModal]);
-
-  useEffect(() => {
-    if (activeModal !== MODAL_DESC) return;
-    const frame = requestAnimationFrame(() => {
-      descTextareaRef.current?.focus({ preventScroll: true });
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [activeModal]);
 
   const handleCopyLink = async () => {
     const link = buildShareLink(boardId);
@@ -231,56 +195,12 @@ export function BoardPanel({ id }: Props) {
     refreshCards();
   };
 
-  // ── Cover upload helpers ──
-  const handleCoverFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploadingCover(true);
-    try {
-      const { url } = await uploadImage(file);
-      setCoverUrl(url);
-      setCoverPreview(url);
-    } catch (err) {
-      setSnackbar((err as Error).message);
-    } finally {
-      setUploadingCover(false);
-      if (coverFileRef.current) coverFileRef.current.value = '';
-    }
-  };
-
-  const handleVKGallery = async () => {
-    try {
-      const auth = await bridge.send('VKWebAppGetAuthToken', { app_id: VK_APP_ID, scope: 'photos' });
-      const res = await bridge.send('VKWebAppCallAPIMethod', {
-        method: 'photos.getAll',
-        params: { count: 1, access_token: auth.access_token, v: '5.131' },
-      });
-      const items = (res.response as { items?: { sizes?: { url: string; width: number }[] }[] })?.items ?? [];
-      if (!items.length) { setSnackbar('Нет фото в галерее'); return; }
-      const sizes = items[0].sizes ?? [];
-      const largest = [...sizes].sort((a, b) => b.width - a.width)[0];
-      if (largest?.url) { setCoverUrl(largest.url); setCoverPreview(largest.url); }
-    } catch {
-      setSnackbar('Не удалось открыть галерею VK');
-    }
-  };
-
   // ── ActionSheet handlers ──
-  const openRename = () => {
-    setEditTitle(board?.title ?? '');
-    setActiveModal(MODAL_RENAME);
-  };
+  const openRename = () => setActiveModal(BOARD_MODAL_IDS.rename);
 
-  const openDesc = () => {
-    setEditDesc(board?.description ?? '');
-    setActiveModal(MODAL_DESC);
-  };
+  const openDesc = () => setActiveModal(BOARD_MODAL_IDS.description);
 
-  const openCover = () => {
-    setCoverUrl(board?.coverImage ?? '');
-    setCoverPreview(board?.coverImage ?? '');
-    setActiveModal(MODAL_COVER);
-  };
+  const openCover = () => setActiveModal(BOARD_MODAL_IDS.cover);
 
   const handleOpenAccessSettings = () => {
     setActiveModal(null);
@@ -292,32 +212,16 @@ export function BoardPanel({ id }: Props) {
     setShowDeleteAlert(true);
   };
 
-  const handleSaveTitle = async () => {
-    if (!editTitle.trim()) return;
-    setSaving(true);
-    try {
-      await updateBoard({ title: editTitle.trim() });
-      setActiveModal(null);
-    } catch (e) { setSnackbar((e as Error).message); }
-    finally { setSaving(false); }
+  const handleSaveTitle = async (title: string) => {
+    await updateBoard({ title });
   };
 
-  const handleSaveDesc = async () => {
-    setSaving(true);
-    try {
-      await updateBoard({ description: editDesc.trim() || undefined });
-      setActiveModal(null);
-    } catch (e) { setSnackbar((e as Error).message); }
-    finally { setSaving(false); }
+  const handleSaveDesc = async (description?: string) => {
+    await updateBoard({ description });
   };
 
-  const handleSaveCover = async () => {
-    setSaving(true);
-    try {
-      await updateBoard({ coverImage: coverUrl || undefined });
-      setActiveModal(null);
-    } catch (e) { setSnackbar((e as Error).message); }
-    finally { setSaving(false); }
+  const handleSaveCover = async (coverImage?: string) => {
+    await updateBoard({ coverImage });
   };
 
 
@@ -325,7 +229,7 @@ export function BoardPanel({ id }: Props) {
   const boardTypeTheme = BOARD_TYPE_THEMES[boardType] ?? BOARD_TYPE_THEMES.kanban;
 
   useEffect(() => {
-    if (boardType !== 'brainstorm' && activeModal === MODAL_SORT) {
+    if (boardType !== 'brainstorm' && activeModal === BOARD_MODAL_IDS.sort) {
       setActiveModal(null);
     }
   }, [boardType, activeModal]);
@@ -364,7 +268,7 @@ export function BoardPanel({ id }: Props) {
     sortHoldTimer.current = setTimeout(() => {
       sortHoldTimer.current = null;
       sortLongPressTriggered.current = true;
-      setActiveModal(MODAL_SORT);
+      setActiveModal(BOARD_MODAL_IDS.sort);
     }, 400);
   };
 
@@ -397,174 +301,47 @@ export function BoardPanel({ id }: Props) {
   }, []);
 
   const closeModal = () => setActiveModal(null);
-
-  const modals: JSX.Element[] = [];
+  const boardModals: JSX.Element[] = [
+    <BoardRenameModal
+      key={BOARD_MODAL_IDS.rename}
+      id={BOARD_MODAL_IDS.rename}
+      open={activeModal === BOARD_MODAL_IDS.rename}
+      initialTitle={board?.title ?? ''}
+      onClose={closeModal}
+      onSave={handleSaveTitle}
+      onError={setSnackbar}
+    />,
+    <BoardDescriptionModal
+      key={BOARD_MODAL_IDS.description}
+      id={BOARD_MODAL_IDS.description}
+      open={activeModal === BOARD_MODAL_IDS.description}
+      initialDescription={board?.description ?? ''}
+      onClose={closeModal}
+      onSave={handleSaveDesc}
+      onError={setSnackbar}
+    />,
+    <BoardCoverModal
+      key={BOARD_MODAL_IDS.cover}
+      id={BOARD_MODAL_IDS.cover}
+      open={activeModal === BOARD_MODAL_IDS.cover}
+      initialCoverImage={board?.coverImage ?? undefined}
+      onClose={closeModal}
+      onSave={handleSaveCover}
+      onError={setSnackbar}
+    />,
+  ];
 
   if (boardType === 'brainstorm') {
-    modals.push(
-      <ModalPage
-        key={MODAL_SORT}
-        id={MODAL_SORT}
-        dynamicContentHeight
-        hideCloseButton
-        header={
-          <ModalPageHeader after={<PanelHeaderClose onClick={closeModal} />}>
-            Сортировка
-          </ModalPageHeader>
-        }
-      >
-        <ModalPageContent>
-          <List>
-            <CellButton
-              before={<Icon16Like />}
-              after={brainstormSort === 'likes' ? <Icon16Done /> : undefined}
-              onClick={() => handleSelectBrainstormSort('likes')}
-            >
-              По лайкам
-            </CellButton>
-            <CellButton
-              before={<Icon16ClockOutline />}
-              after={brainstormSort === 'date' ? <Icon16Done /> : undefined}
-              onClick={() => handleSelectBrainstormSort('date')}
-            >
-              По дате
-            </CellButton>
-          </List>
-        </ModalPageContent>
-      </ModalPage>,
+    boardModals.unshift(
+      <BrainstormSortModal
+        key={BOARD_MODAL_IDS.sort}
+        id={BOARD_MODAL_IDS.sort}
+        sortMode={brainstormSort}
+        onClose={closeModal}
+        onSelect={handleSelectBrainstormSort}
+      />,
     );
   }
-
-  modals.push(
-    <ModalPage
-      key={MODAL_RENAME}
-      id={MODAL_RENAME}
-      dynamicContentHeight
-      hideCloseButton
-      header={
-        <ModalPageHeader after={<PanelHeaderClose onClick={closeModal} />}>
-          Название доски
-        </ModalPageHeader>
-      }
-    >
-      <ModalPageContent>
-        <Box>
-          <FormItem top="Название *">
-            <Input
-              value={editTitle}
-              onChange={(e) => setEditTitle(e.target.value)}
-              maxLength={100}
-              getRef={renameInputRef}
-              onKeyDown={(e) => e.key === 'Enter' && handleSaveTitle()}
-            />
-          </FormItem>
-          <FormItem>
-            <Button size="l" stretched onClick={handleSaveTitle} disabled={!editTitle.trim() || saving} loading={saving}>
-              Сохранить
-            </Button>
-          </FormItem>
-        </Box>
-      </ModalPageContent>
-    </ModalPage>,
-    <ModalPage
-      key={MODAL_DESC}
-      id={MODAL_DESC}
-      dynamicContentHeight
-      hideCloseButton
-      header={
-        <ModalPageHeader after={<PanelHeaderClose onClick={closeModal} />}>
-          Описание доски
-        </ModalPageHeader>
-      }
-    >
-      <ModalPageContent>
-        <Box>
-          <FormItem top="Описание">
-            <Textarea
-              value={editDesc}
-              onChange={(e) => setEditDesc(e.target.value)}
-              placeholder="Необязательно"
-              maxLength={300}
-              rows={4}
-              getRef={descTextareaRef}
-            />
-          </FormItem>
-          <FormItem>
-            <Button size="l" stretched onClick={handleSaveDesc} disabled={saving} loading={saving}>
-              Сохранить
-            </Button>
-          </FormItem>
-        </Box>
-      </ModalPageContent>
-    </ModalPage>,
-    <ModalPage
-      key={MODAL_COVER}
-      id={MODAL_COVER}
-      dynamicContentHeight
-      hideCloseButton
-      header={
-        <ModalPageHeader after={<PanelHeaderClose onClick={closeModal} />}>
-          Обложка доски
-        </ModalPageHeader>
-      }
-    >
-      <ModalPageContent>
-        <Box>
-          <FormItem>
-            <input
-              ref={coverFileRef}
-              type="file"
-              accept="image/*"
-              style={{ display: 'none' }}
-              onChange={handleCoverFile}
-            />
-            {coverPreview && (
-              <img
-                src={coverPreview}
-                alt="preview"
-                style={{ width: '100%', maxHeight: 160, objectFit: 'cover', borderRadius: 8, marginBottom: 8 }}
-              />
-            )}
-            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-              <Button
-                size="m"
-                mode="secondary"
-                stretched
-                loading={uploadingCover}
-                disabled={uploadingCover}
-                onClick={() => coverFileRef.current?.click()}
-              >
-                С устройства
-              </Button>
-              <Button
-                size="m"
-                mode="secondary"
-                stretched
-                onClick={handleVKGallery}
-              >
-                Из VK Фото
-              </Button>
-            </div>
-            {coverPreview && (
-              <Button
-                size="m"
-                appearance="negative"
-                mode="outline"
-                stretched
-                style={{ marginBottom: 8 }}
-                onClick={() => { setCoverUrl(''); setCoverPreview(''); }}
-              >
-                Убрать обложку
-              </Button>
-            )}
-            <Button size="l" stretched onClick={handleSaveCover} disabled={saving} loading={saving}>
-              Сохранить
-            </Button>
-          </FormItem>
-        </Box>
-      </ModalPageContent>
-    </ModalPage>,
-  );
 
   return (
     <Panel id={id} className="board-panel">
@@ -735,7 +512,7 @@ export function BoardPanel({ id }: Props) {
 
       {/* Mini modals */}
       <ModalRoot activeModal={activeModal} onClose={closeModal}>
-        {modals}
+        {boardModals}
       </ModalRoot>
 
       {showDeleteAlert && (

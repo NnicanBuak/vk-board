@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Icon16Add, Icon16Delete } from '@vkontakte/icons';
-import type { Note } from '../../types/note';
+import type { Note } from '../../../types/note';
 
 interface NoteTreeItem extends Note {
   children: NoteTreeItem[];

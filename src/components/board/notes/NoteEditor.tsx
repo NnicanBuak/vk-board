@@ -3,7 +3,7 @@ import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
 import Link from '@tiptap/extension-link';
-import type { Note } from '../../types/note';
+import type { Note } from '../../../types/note';
 
 interface ToolbarProps {
   editor: ReturnType<typeof useEditor>;

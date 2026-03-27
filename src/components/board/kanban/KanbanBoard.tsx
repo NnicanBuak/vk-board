@@ -12,12 +12,13 @@ import {
   type DragEndEvent,
 } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { Box, ModalRoot, ModalPage, ModalPageContent, ModalPageHeader, PanelHeaderClose, FormItem, Input, Button } from '@vkontakte/vkui';
+import { ModalRoot } from '@vkontakte/vkui';
 import { Icon16Add } from '@vkontakte/icons';
 import { KanbanColumn } from './KanbanColumn';
 import { KanbanCard } from './KanbanCard';
-import { CardForm } from '../card/CardForm';
-import type { Card, Column } from '../../types/card';
+import { CreateCardModal } from '../../modals/CreateCardModal';
+import { CreateColumnModal } from '../../modals/CreateColumnModal';
+import type { Card, Column } from '../../../types/card';
 
 interface BacklogProps {
   cards: Card[];
@@ -55,8 +56,13 @@ function BacklogColumn({ cards, currentUserId, onCardClick, onCardLike, onAddCar
   );
 }
 
-const MODAL_CARD = 'kb_card_form';
-const MODAL_ADD_COLUMN = 'kb_add_column';
+const KANBAN_MODAL_IDS = {
+  createCard: 'kb_card_form',
+  createColumn: 'kb_add_column',
+} as const;
+
+type KanbanModalId =
+  (typeof KANBAN_MODAL_IDS)[keyof typeof KANBAN_MODAL_IDS];
 
 interface KanbanBoardProps {
   cards: Card[];
@@ -81,9 +87,9 @@ export function KanbanBoard({
   onCardClick, onSnackbar, onDraggingChange, registerFabAction,
 }: KanbanBoardProps) {
   const [activeCard, setActiveCard] = useState<Card | null>(null);
-  const [activeModal, setActiveModal] = useState<string | null>(null);
+  const [activeModal, setActiveModal] = useState<KanbanModalId | null>(null);
   const [addCardColumnId, setAddCardColumnId] = useState<string | null>(null);
-  const [newColumnTitle, setNewColumnTitle] = useState('');
+  const closeModal = () => setActiveModal(null);
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
@@ -117,7 +123,7 @@ export function KanbanBoard({
 
   const openAddCard = useCallback((columnId: string | null = null) => {
     setAddCardColumnId(columnId);
-    setActiveModal(MODAL_CARD);
+    setActiveModal(KANBAN_MODAL_IDS.createCard);
   }, []);
 
 
@@ -128,24 +134,11 @@ export function KanbanBoard({
     return () => registerFabAction(null);
   }, [canEdit, registerFabAction, openAddCard]);
   const handleCardSave = async (data: { title: string; description?: string; url?: string }) => {
-    try {
-      await addCard({ ...data, columnId: addCardColumnId });
-      setActiveModal(null);
-    } catch (e) {
-      onSnackbar((e as Error).message);
-    }
+    await addCard({ ...data, columnId: addCardColumnId });
   };
 
-  const handleAddColumn = async () => {
-    const title = newColumnTitle.trim();
-    if (!title) return;
-    try {
-      await addColumn(title);
-      setNewColumnTitle('');
-      setActiveModal(null);
-    } catch (e) {
-      onSnackbar((e as Error).message);
-    }
+  const handleAddColumn = async (title: string) => {
+    await addColumn(title);
   };
 
   return (
@@ -185,7 +178,7 @@ export function KanbanBoard({
             <div className="kcolumn kcolumn--ghost">
               <button
                 className="kcolumn__new-btn"
-                onClick={() => { setNewColumnTitle(''); setActiveModal(MODAL_ADD_COLUMN); }}
+                onClick={() => setActiveModal(KANBAN_MODAL_IDS.createColumn)}
               >
                 <Icon16Add />
                 <span>Новая колонка</span>
@@ -205,51 +198,26 @@ export function KanbanBoard({
         </DragOverlay>
       </DndContext>
 
-
-      <ModalRoot activeModal={activeModal} onClose={() => setActiveModal(null)}>
-        <ModalPage
-          id={MODAL_CARD}
-          dynamicContentHeight
-          hideCloseButton
-          header={<ModalPageHeader>Новая карточка</ModalPageHeader>}
-        >
-          <ModalPageContent>
-            <CardForm
-              onSave={handleCardSave}
-              onCancel={() => setActiveModal(null)}
-            />
-          </ModalPageContent>
-        </ModalPage>
-
-        <ModalPage
-          id={MODAL_ADD_COLUMN}
-          dynamicContentHeight
-          hideCloseButton
-          header={
-            <ModalPageHeader after={<PanelHeaderClose onClick={() => setActiveModal(null)} />}>
-              Новая колонка
-            </ModalPageHeader>
-          }
-        >
-          <ModalPageContent>
-            <Box>
-              <FormItem top="Название колонки">
-                <Input
-                  value={newColumnTitle}
-                  onChange={(e) => setNewColumnTitle(e.target.value)}
-                  placeholder="Например: В работе"
-                  onKeyDown={(e) => e.key === 'Enter' && handleAddColumn()}
-                  autoFocus
-                />
-              </FormItem>
-              <FormItem>
-                <Button size="l" stretched onClick={handleAddColumn} disabled={!newColumnTitle.trim()}>
-                  Создать
-                </Button>
-              </FormItem>
-            </Box>
-          </ModalPageContent>
-        </ModalPage>
+      <ModalRoot activeModal={activeModal} onClose={closeModal}>
+        <CreateCardModal
+          id={KANBAN_MODAL_IDS.createCard}
+          open={activeModal === KANBAN_MODAL_IDS.createCard}
+          title="Новая карточка"
+          onClose={closeModal}
+          onSave={handleCardSave}
+          onError={onSnackbar}
+        />
+        <CreateColumnModal
+          id={KANBAN_MODAL_IDS.createColumn}
+          open={activeModal === KANBAN_MODAL_IDS.createColumn}
+          title="Новая колонка"
+          fieldLabel="Название колонки"
+          placeholder="Например: В работе"
+          submitLabel="Создать"
+          onClose={closeModal}
+          onCreate={handleAddColumn}
+          onError={onSnackbar}
+        />
       </ModalRoot>
     </>
   );

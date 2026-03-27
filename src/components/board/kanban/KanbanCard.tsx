@@ -1,7 +1,7 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Icon16Like, Icon16LikeOutline } from '@vkontakte/icons';
-import type { Card } from '../../types/card';
+import type { Card } from '../../../types/card';
 
 const AVATAR_COLORS = ['#e53935', '#8e24aa', '#1e88e5', '#00897b', '#f4511e', '#33b679', '#fb8c00'];
 function assigneeColor(uid: number) { return AVATAR_COLORS[uid % AVATAR_COLORS.length]; }

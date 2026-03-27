@@ -1,18 +1,11 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import {
   Panel,
-  Button,
-  FormItem,
-  Input,
-  Textarea,
   Spinner,
   PullToRefresh,
   Snackbar,
   Box,
   ModalRoot,
-  ModalPage,
-  ModalPageContent,
-  ModalPageHeader,
   Tabs,
   TabsItem,
 } from "@vkontakte/vkui";
@@ -27,16 +20,26 @@ import {
 } from "@vkontakte/icons";
 import { useFab } from "../store/fabState";
 import { PANELS } from "../router/routes";
-import { BOARD_TYPES, BOARD_TYPE_ICONS } from "../constants/boardTypes";
-
 import { useBoards } from "../hooks/useBoards";
 import { BoardListItem } from "../components/board/BoardListItem";
 import { EmptyState } from "../components/common/EmptyState";
 import { ErrorPlaceholder } from "../components/common/ErrorPlaceholder";
+import { CreateBoardModal } from "../components/modals/CreateBoardModal";
 import { getRecentBoardIds } from "../utils/recentBoards";
-import type { Board, BoardType } from "../types/board";
+import type { Board } from "../types/board";
 
-const MODAL_CREATE = "create_board";
+const HOME_MODAL_IDS = {
+  createBoard: "create_board",
+} as const;
+const TAB_SWITCH_FADE_MS = 140;
+const TAB_SWITCH_LOADING_MS = 220;
+const TAB_SWITCH_ENTER_MS = 320;
+const TAB_LOADING_CARD_COUNT = 4;
+
+type HomeTab = "recent" | "mine";
+type HomeModalId = (typeof HOME_MODAL_IDS)[keyof typeof HOME_MODAL_IDS];
+type HomeTabTransitionPhase = "idle" | "fade-out" | "loading";
+type HomeTabEnterState = "idle" | "prep" | "active";
 
 interface Props {
   id: string;
@@ -48,23 +51,17 @@ export function HomePanel({ id }: Props) {
   const { showFab, hideFab } = useFab();
   const { boards, loading, error, refresh, createBoard } = useBoards();
 
-  const [activeTab, setActiveTab] = useState<"recent" | "mine">("recent");
-  const [activeModal, setActiveModal] = useState<string | null>(null);
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [coverImage, setCoverImage] = useState("");
-  const [boardType, setBoardType] = useState<BoardType>("kanban");
-  const [creating, setCreating] = useState(false);
+  const [activeTab, setActiveTab] = useState<HomeTab>("recent");
+  const [displayedTab, setDisplayedTab] = useState<HomeTab>("recent");
+  const [tabTransitionPhase, setTabTransitionPhase] =
+    useState<HomeTabTransitionPhase>("idle");
+  const [tabEnterState, setTabEnterState] = useState<HomeTabEnterState>("idle");
+  const [tabEnterVersion, setTabEnterVersion] = useState(0);
+  const [activeModal, setActiveModal] = useState<HomeModalId | null>(null);
   const [snackbar, setSnackbar] = useState<string | null>(null);
-  const createTitleInputRef = useRef<HTMLInputElement | null>(null);
 
-  const openCreate = () => {
-    setTitle("Новая доска");
-    setDescription("");
-    setCoverImage("");
-    setBoardType("kanban");
-    setActiveModal(MODAL_CREATE);
-  };
+  const closeModal = () => setActiveModal(null);
+  const openCreate = () => setActiveModal(HOME_MODAL_IDS.createBoard);
 
   useEffect(() => {
     if (panel !== PANELS.HOME) return;
@@ -77,31 +74,51 @@ export function HomePanel({ id }: Props) {
   }, [panel, activeModal, showFab, hideFab]);
 
   useEffect(() => {
-    if (activeModal !== MODAL_CREATE) return;
-    const frame = requestAnimationFrame(() => {
-      createTitleInputRef.current?.focus({ preventScroll: true });
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [activeModal]);
-
-  const handleCreate = async () => {
-    if (!title.trim()) return;
-    setCreating(true);
-    try {
-      const board = await createBoard({
-        title: title.trim(),
-        description: description.trim() || undefined,
-        coverImage: coverImage.trim() || undefined,
-        boardType,
-      });
-      setActiveModal(null);
-      navigator.push(`/board/${board.id}`);
-    } catch (e) {
-      setSnackbar((e as Error).message);
-    } finally {
-      setCreating(false);
+    if (activeTab === displayedTab) {
+      return;
     }
-  };
+
+    const switchTimer = window.setTimeout(() => {
+      setDisplayedTab(activeTab);
+      setTabTransitionPhase("loading");
+    }, TAB_SWITCH_FADE_MS);
+
+    const revealTimer = window.setTimeout(() => {
+      setTabEnterVersion((current) => current + 1);
+      setTabEnterState("prep");
+      setTabTransitionPhase("idle");
+    }, TAB_SWITCH_FADE_MS + TAB_SWITCH_LOADING_MS);
+
+    return () => {
+      window.clearTimeout(switchTimer);
+      window.clearTimeout(revealTimer);
+    };
+  }, [activeTab, displayedTab]);
+
+  useEffect(() => {
+    if (tabEnterState !== "prep") {
+      return;
+    }
+
+    let frameOne = 0;
+    let frameTwo = 0;
+    let settleTimer = 0;
+
+    frameOne = window.requestAnimationFrame(() => {
+      frameTwo = window.requestAnimationFrame(() => {
+        setTabEnterState("active");
+        settleTimer = window.setTimeout(() => {
+          setTabEnterState("idle");
+        }, TAB_SWITCH_ENTER_MS);
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameOne);
+      window.cancelAnimationFrame(frameTwo);
+      window.clearTimeout(settleTimer);
+    };
+  }, [tabEnterState, tabEnterVersion]);
 
   const openBoard = (boardId: string) => navigator.push(`/board/${boardId}`);
 
@@ -114,91 +131,53 @@ export function HomePanel({ id }: Props) {
   const unseenBoards = boards.filter((b) => !recentIds.includes(b.id));
   const allRecentBoards = [...recentBoards, ...unseenBoards];
 
-  const tabBoards = activeTab === "mine" ? myBoards : allRecentBoards;
+  const displayedTabBoards =
+    displayedTab === "mine" ? myBoards : allRecentBoards;
+  const isInitialLoading = loading && !boards.length;
+  const isTabSwitchLoading =
+    !isInitialLoading && tabTransitionPhase === "loading";
+  const tabContentClassName = [
+    "home-tab-content",
+    tabTransitionPhase !== "idle"
+      ? `home-tab-content--${tabTransitionPhase}`
+      : "",
+    tabEnterState === "prep" ? "home-tab-content--enter-prep" : "",
+    tabEnterState === "active" ? "home-tab-content--enter-active" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
-  const newBoardModal = (
-    <ModalRoot activeModal={activeModal} onClose={() => setActiveModal(null)}>
-      <ModalPage
-        id={MODAL_CREATE}
-        dynamicContentHeight
-        header={
-          <ModalPageHeader
-          >
-            Новая доска
-          </ModalPageHeader>
-        }
-      >
-        <ModalPageContent>
-          <Box>
-            <FormItem top="Название *">
-              <Input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Например: дорожная карта"
-                maxLength={100}
-                getRef={createTitleInputRef}
-                onFocus={(e) => e.target.select()}
-              />
-            </FormItem>
-            <FormItem top="Описание">
-              <Textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Для чего полезна эта доска?"
-                maxLength={600}
-                rows={2}
-              />
-            </FormItem>
-            <FormItem top="Тип доски">
-              <div className="board-type-picker">
-                {BOARD_TYPES.map((t) => {
-                  const active = boardType === t.value;
-                  const BoardTypeIcon = BOARD_TYPE_ICONS[t.value];
-                  return (
-                    <button
-                      key={t.value}
-                      type="button"
-                      className={`board-type-btn${active ? " board-type-btn--active" : ""}`}
-                      onClick={() => setBoardType(t.value)}
-                    >
-                      <span className="board-type-btn__icon" aria-hidden="true">
-                        <BoardTypeIcon />
-                      </span>
-                      <div className="board-type-btn__text">
-                        <div className="board-type-btn__name">{t.label}</div>
-                        <div className="board-type-btn__desc">{t.desc}</div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </FormItem>
-            <FormItem>
-              <Button
-                size="l"
-                stretched
-                onClick={handleCreate}
-                disabled={!title.trim() || creating}
-                loading={creating}
-              >
-                Создать доску
-              </Button>
-            </FormItem>
-          </Box>
-        </ModalPageContent>
-      </ModalPage>
-    </ModalRoot>
-  );
+  const handleTabChange = (nextTab: HomeTab) => {
+    if (nextTab === activeTab) {
+      return;
+    }
+
+    setTabEnterState("idle");
+    setTabTransitionPhase("fade-out");
+    setActiveTab(nextTab);
+  };
 
   return (
     <Panel id={id}>
       <PullToRefresh onRefresh={refresh} isFetching={loading}>
         {/* Hero section */}
         <div className="hero-bg">
-          <div className="hero-orb hero-orb--1" />
-          <div className="hero-orb hero-orb--2" />
-          <div className="hero-orb hero-orb--3" />
-          <div className="hero-orb hero-orb--4" />
+          <div className="hero-wave hero-wave--1" />
+          <div className="hero-wave hero-wave--2" />
+          <div className="hero-wave hero-wave--3" />
+          <div className="hero-wave hero-wave--4" />
+          <div className="hero-ball-orbit hero-ball-orbit--1">
+            <div className="hero-ball hero-ball--1" />
+          </div>
+          <div className="hero-ball-orbit hero-ball-orbit--2">
+            <div className="hero-ball hero-ball--2" />
+          </div>
+          <div className="hero-ball-orbit hero-ball-orbit--3">
+            <div className="hero-ball hero-ball--3" />
+          </div>
+          <div className="hero-ball-orbit hero-ball-orbit--4">
+            <div className="hero-ball hero-ball--4" />
+          </div>
 
           <div className="page-inner hero-bg__content">
             <div className="hero__title">Коллабо
@@ -229,65 +208,108 @@ export function HomePanel({ id }: Props) {
         {!error && (
           <div className="page-inner">
             {/* Tabs */}
-            <Tabs className="home-tabs">
+            <Tabs
+              mode="secondary"
+              layoutFillMode="auto"
+              className="home-tabs"
+            >
               <TabsItem
                 selected={activeTab === "recent"}
-                onClick={() => setActiveTab("recent")}
+                onClick={() => handleTabChange("recent")}
+                hoverMode=""
+                activeMode=""
+                hasHover={false}
+                hasActive={false}
               >
                 Недавние
               </TabsItem>
               <TabsItem
                 selected={activeTab === "mine"}
-                onClick={() => setActiveTab("mine")}
+                onClick={() => handleTabChange("mine")}
+                hoverMode=""
+                activeMode=""
+                hasHover={false}
+                hasActive={false}
               >
                 Мои
               </TabsItem>
             </Tabs>
 
             {/* Board list */}
-            {loading && !boards.length ? (
-              <Box
-                style={{
-                  display: "flex",
-                  justifyContent: "center",
-                  paddingTop: 48,
-                }}
-              >
-                <Spinner size="l" />
-              </Box>
-            ) : tabBoards.length === 0 ? (
-              <EmptyState
-                header={
-                  activeTab === "mine"
-                    ? "Ещё нет своих досок"
-                    : "Нет недавних досок"
-                }
-                text={
-                  activeTab === "mine"
-                    ? "Нажмите «Создать доску», чтобы начать"
-                    : "Откройте доску по ссылке или создайте свою"
-                }
-                actionLabel="Создать доску"
-                onAction={openCreate}
-              />
-            ) : (
-              <div className="board-grid">
-                {tabBoards.map((b) => (
-                  <BoardListItem
-                    key={b.id}
-                    board={b}
-                    onClick={() => openBoard(b.id)}
-                  />
-                ))}
-              </div>
-            )}
+            <div className={tabContentClassName}>
+              {isInitialLoading ? (
+                <Box
+                  style={{
+                    display: "flex",
+                    justifyContent: "center",
+                    paddingTop: 48,
+                  }}
+                >
+                  <Spinner size="l" />
+                </Box>
+              ) : isTabSwitchLoading ? (
+                <div
+                  className="board-grid board-grid--loading"
+                  aria-label="Загрузка досок"
+                >
+                  {Array.from({ length: TAB_LOADING_CARD_COUNT }, (_, index) => (
+                    <div
+                      key={`tab-skeleton-${displayedTab}-${index}`}
+                      className="board-card board-card--skeleton"
+                      aria-hidden="true"
+                    >
+                      <div className="board-card__preview" />
+                      <div className="board-card__body">
+                        <div className="board-card__skeleton-line board-card__skeleton-line--title" />
+                        <div className="board-card__skeleton-line" />
+                        <div className="board-card__skeleton-line board-card__skeleton-line--short" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : displayedTabBoards.length === 0 ? (
+                <EmptyState
+                  header={
+                    displayedTab === "mine"
+                      ? "Ещё нет своих досок"
+                      : "Нет недавних досок"
+                  }
+                  text={
+                    displayedTab === "mine"
+                      ? "Нажмите «Создать доску», чтобы начать"
+                      : "Откройте доску по ссылке или создайте свою"
+                  }
+                  actionLabel="Создать доску"
+                  onAction={openCreate}
+                />
+              ) : (
+                <div className="board-grid">
+                  {displayedTabBoards.map((b) => (
+                    <BoardListItem
+                      key={b.id}
+                      board={b}
+                      onClick={() => openBoard(b.id)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
 
             <div style={{ height: 88 }} />
           </div>
         )}
       </PullToRefresh>
 
-      {newBoardModal}
+      <ModalRoot activeModal={activeModal} onClose={closeModal}>
+        <CreateBoardModal
+          id={HOME_MODAL_IDS.createBoard}
+          open={activeModal === HOME_MODAL_IDS.createBoard}
+          onClose={closeModal}
+          onCreate={createBoard}
+          onCreated={(board) => navigator.push(`/board/${board.id}`)}
+          onError={setSnackbar}
+        />
+      </ModalRoot>
 
       {snackbar && (
         <Snackbar onClose={() => setSnackbar(null)}>{snackbar}</Snackbar>

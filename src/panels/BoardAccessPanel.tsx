@@ -13,19 +13,16 @@ import {
   CustomSelect,
   Button,
   Div,
-  Search,
   ModalRoot,
-  ModalPage,
-  ModalPageContent,
-  ModalPageHeader,
-  PanelHeaderClose,
-  Checkbox,
-  Placeholder,
   SegmentedControl,
 } from '@vkontakte/vkui';
 import { Icon28UserAddOutline } from '@vkontakte/icons';
 import { useRouteNavigator, useParams } from '@vkontakte/vk-mini-apps-router';
 import { boardsApi } from '../api/boards';
+import {
+  BoardPeoplePickerModal,
+  type VKPerson,
+} from '../components/modals/BoardPeoplePickerModal';
 import { useBoardDetail } from '../hooks/useBoardDetail';
 import { useUser } from '../store/userState';
 import type { BoardVisibility } from '../types/board';
@@ -46,14 +43,12 @@ const ASSIGNABLE_ROLES: Array<{ value: Extract<BoardRole, 'editor' | 'viewer'>; 
   { value: 'viewer', label: 'Читатель' },
 ];
 
-interface VKPerson {
-  id: number;
-  firstName: string;
-  lastName: string;
-  photo: string;
-}
+const BOARD_ACCESS_MODAL_IDS = {
+  peoplePicker: 'people_picker',
+} as const;
 
-const MODAL_PICKER = 'people_picker';
+type BoardAccessModalId =
+  (typeof BOARD_ACCESS_MODAL_IDS)[keyof typeof BOARD_ACCESS_MODAL_IDS];
 
 interface Props { id: string }
 
@@ -75,7 +70,7 @@ export function BoardAccessPanel({ id }: Props) {
   const [savingVisibility, setSavingVisibility] = useState(false);
 
   // People picker state
-  const [activeModal, setActiveModal] = useState<string | null>(null);
+  const [activeModal, setActiveModal] = useState<BoardAccessModalId | null>(null);
   const [candidates, setCandidates] = useState<VKPerson[]>([]);
   const [loadingCandidates, setLoadingCandidates] = useState(false);
   const [candidatesError, setCandidatesError] = useState<string | null>(null);
@@ -210,7 +205,7 @@ export function BoardAccessPanel({ id }: Props) {
   };
 
   const openPicker = async () => {
-    setActiveModal(MODAL_PICKER);
+    setActiveModal(BOARD_ACCESS_MODAL_IDS.peoplePicker);
     await loadCandidates();
   };
 
@@ -289,6 +284,12 @@ export function BoardAccessPanel({ id }: Props) {
   const pickerLabel = boardContext === 'chat' ? 'участников чата'
     : boardContext === 'community' ? 'участников сообщества'
     : 'друзей';
+  const pickerTitle = boardContext === 'chat'
+    ? 'Участники чата'
+    : boardContext === 'community'
+      ? 'Участники сообщества'
+      : 'Друзья';
+  const closeModal = () => setActiveModal(null);
 
   return (
     <Panel id={id}>
@@ -300,6 +301,7 @@ export function BoardAccessPanel({ id }: Props) {
       <Group header={<Header size="s">Видимость доски</Header>}>
         <Div>
           <SegmentedControl
+            className="board-access-segmented"
             size="m"
             value={visibility}
             onChange={(v) => canManageVisibility && handleVisibilityToggle(v as BoardVisibility)}
@@ -380,82 +382,22 @@ export function BoardAccessPanel({ id }: Props) {
       )}
 
       {/* People picker modal */}
-      <ModalRoot activeModal={activeModal} onClose={() => setActiveModal(null)}>
-        <ModalPage
-          id={MODAL_PICKER}
-          dynamicContentHeight
-          hideCloseButton
-          header={
-            <ModalPageHeader
-              after={<PanelHeaderClose onClick={() => setActiveModal(null)} />}
-            >
-              {boardContext === 'chat' ? 'Участники чата'
-                : boardContext === 'community' ? 'Участники сообщества'
-                : 'Друзья'}
-            </ModalPageHeader>
-          }
-          footer={
-            selectedIds.length > 0 ? (
-              <Div>
-                <Button
-                  size="l"
-                  stretched
-                  onClick={handleInviteSelected}
-                  loading={inviting}
-                  disabled={inviting}
-                >
-                  Добавить {selectedIds.length > 1 ? `(${selectedIds.length})` : ''}
-                </Button>
-              </Div>
-            ) : null
-          }
-        >
-          <ModalPageContent>
-            {loadingCandidates ? (
-            <Div style={{ display: 'flex', justifyContent: 'center', padding: 32 }}>
-              <Spinner size="l" />
-            </Div>
-          ) : candidatesError ? (
-            <Placeholder
-              action={
-                <Button onClick={loadCandidates}>Повторить</Button>
-              }
-            >
-              {candidatesError}
-            </Placeholder>
-          ) : (
-            <>
-              <Search value={search} onChange={(e) => setSearch(e.target.value)} />
-              {filtered.length === 0 ? (
-                <Placeholder>Никого нет</Placeholder>
-              ) : (
-                filtered.map((person) => {
-                  const checked = selectedIds.includes(person.id);
-                  return (
-                    <Cell
-                      key={person.id}
-                      before={
-                        <Avatar size={40} src={person.photo || undefined}>
-                          {!person.photo ? `${person.firstName.charAt(0)}${person.lastName.charAt(0)}` : ''}
-                        </Avatar>
-                      }
-                      after={
-                        <Checkbox
-                          checked={checked}
-                          onChange={() => toggleSelect(person.id)}
-                        />
-                      }
-                      onClick={() => toggleSelect(person.id)}
-                    >
-                      {person.firstName} {person.lastName}
-                    </Cell>
-                  );
-                })
-              )}
-            </>
-          )}
-          </ModalPageContent>
-        </ModalPage>
+      <ModalRoot activeModal={activeModal} onClose={closeModal}>
+        <BoardPeoplePickerModal
+          id={BOARD_ACCESS_MODAL_IDS.peoplePicker}
+          title={pickerTitle}
+          people={filtered}
+          loading={loadingCandidates}
+          error={candidatesError}
+          search={search}
+          selectedIds={selectedIds}
+          inviting={inviting}
+          onClose={closeModal}
+          onSearchChange={setSearch}
+          onToggleSelect={toggleSelect}
+          onInvite={handleInviteSelected}
+          onRetry={loadCandidates}
+        />
       </ModalRoot>
 
       {snackbar && <Snackbar onClose={() => setSnackbar(null)}>{snackbar}</Snackbar>}

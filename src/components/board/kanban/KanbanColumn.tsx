@@ -2,7 +2,7 @@ import { useState, useRef } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { Icon16Add } from '@vkontakte/icons';
-import type { Card, Column } from '../../types/card';
+import type { Card, Column } from '../../../types/card';
 import { KanbanCard } from './KanbanCard';
 
 interface Props {
